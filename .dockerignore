@@ -1,0 +1,8 @@
+.git
+**/bin/
+**/bin/**
+**/obj/
+**/obj/**
+client/node_modules
+client/dist
+**/.DS_Store
