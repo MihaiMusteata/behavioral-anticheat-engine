@@ -1,9 +1,244 @@
+# Secrets below (Postgres/JWT/seed user passwords) all fall back to dev-only
+# placeholder values so `docker compose up` works out of the box with zero
+# setup. Those placeholders are public (committed to source control) - fine
+# for local-only use, but you MUST override them via a `.env` file (copy
+# .env.example, gitignored) before ever exposing this stack through ngrok or
+# any other public tunnel for a real exam. Otherwise anyone who reads this
+# repo can forge a valid Admin JWT or log in with the seeded credentials
+# against your live instance.
 services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: behavioral_anticheat
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d behavioral_anticheat"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redpanda:
+    image: redpandadata/redpanda:latest
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - 512M
+      - --reserve-memory
+      - 0M
+      - --node-id
+      - "0"
+      - --check=false
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092,OUTSIDE://0.0.0.0:19092
+      - --advertise-kafka-addr
+      - PLAINTEXT://redpanda:9092,OUTSIDE://localhost:19092
+    ports:
+      - "19092:19092"
+      - "9644:9644"
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:v3.10.0
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      REDPANDA_ADMINAPI_ENABLED: "true"
+      REDPANDA_ADMINAPI_URLS: http://redpanda:9644
+    ports:
+      - "8081:8080"
+    depends_on:
+      redpanda:
+        condition: service_started
+
+  # --- Observability stack -------------------------------------------------
+  # Traces + metrics + logs from api/worker (via OTLP) plus infra/exporter
+  # metrics (below) all land here. Grafana UI on :3000 is for the operator
+  # only - do NOT tunnel port 3000 through ngrok, that would expose an
+  # unauthenticated dashboard to the internet. Keep it reachable only via
+  # localhost / SSH tunnel / VPN on the host machine.
+  otel-lgtm:
+    image: grafana/otel-lgtm:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000" # Grafana UI (operator only, see note above)
+      - "4317:4317" # OTLP gRPC (api/worker send traces+metrics+logs here)
+      - "4318:4318" # OTLP HTTP
+      - "9090:9090" # Prometheus UI (optional, operator only)
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-changeme-before-live-test}
+    volumes:
+      - otel_lgtm_data:/data
+      - ./observability/otelcol-config.yaml:/otel-lgtm/otelcol-config.yaml:ro
+      - ./observability/grafana-dashboards-provisioning.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/custom.yaml:ro
+      - ./observability/dashboards/behavioral-anticheat-overview.json:/otel-lgtm/grafana/conf/provisioning/dashboards/custom/behavioral-anticheat-overview.json:ro
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/behavioral_anticheat?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    privileged: true
+    restart: unless-stopped
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+
+  kminion:
+    image: redpandadata/kminion:latest
+    restart: unless-stopped
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+    depends_on:
+      redpanda:
+        condition: service_started
+  # --------------------------------------------------------------------------
+
+  # --- Single public entry point --------------------------------------------
+  # Everything a student's browser hits (UI + API) goes through this ONE
+  # port, so a single `ngrok http 8000` tunnel is enough - no CORS, no
+  # per-service tunnels, works the same from any device/network. Routing is
+  # path-based: requests to /api/* go to the api container, everything else
+  # goes to the client (React SPA). Traefik discovers both automatically via
+  # Docker labels (exposedByDefault=false means nothing else - postgres,
+  # redis, grafana, etc. - is ever reachable through it).
+  # Traefik's own dashboard is bound to 127.0.0.1 only - do NOT tunnel :8090.
+  traefik:
+    image: traefik:v3.5
+    restart: unless-stopped
+    command:
+      # Scope discovery to THIS project only - the host also runs other
+      # docker-compose projects with their own (identically-named!)
+      # traefik.enable labels, which would otherwise collide with ours.
+      - --providers.docker=true
+      - --providers.docker.exposedByDefault=false
+      - --providers.docker.constraints=Label(`com.docker.compose.project`, `${COMPOSE_PROJECT_NAME}`)
+      - --entrypoints.web.address=:80
+      - --entrypoints.traefik.address=:8080
+      - --api.dashboard=true
+      - --api.insecure=true
+    ports:
+      - "8000:80" # <- point ngrok at this port
+      - "127.0.0.1:8090:8080" # Traefik dashboard, localhost only
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - api
+      - client
+  # --------------------------------------------------------------------------
+
+  api:
+    build:
+      context: .
+      dockerfile: src/BehavioralAnticheatEngine.Api/Dockerfile
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=PathPrefix(`/api`)"
+      - "traefik.http.routers.api.entrypoints=web"
+      - "traefik.http.routers.api.priority=100"
+      - "traefik.http.services.api.loadbalancer.server.port=8080"
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=behavioral_anticheat;Username=postgres;Password=${POSTGRES_PASSWORD:-postgres}
+      Redis__Configuration: redis:6379
+      Kafka__BootstrapServers: redpanda:9092
+      Kafka__BehavioralEventsTopic: behavioral-events
+      Kafka__ConsumerGroupId: behavioral-anticheat-worker
+      Jwt__AccessToken__SigningKey: ${JWT_ACCESS_SIGNING_KEY:-development-access-token-signing-key-change-before-production}
+      Jwt__RefreshToken__SigningKey: ${JWT_REFRESH_SIGNING_KEY:-development-refresh-token-signing-key-change-before-production}
+      SeedUsers__0__Email: admin@example.test
+      SeedUsers__0__Password: ${SEED_ADMIN_PASSWORD:-Admin123!}
+      SeedUsers__0__Role: Admin
+      SeedUsers__1__Email: student@example.test
+      SeedUsers__1__Password: ${SEED_STUDENT_PASSWORD:-Student123!}
+      SeedUsers__1__Role: Student
+      OpenTelemetry__OtlpEndpoint: http://otel-lgtm:4317
+      OpenTelemetry__Environment: live-test
+    ports:
+      - "8181:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_started
+      otel-lgtm:
+        condition: service_started
+
+  worker:
+    build:
+      context: .
+      dockerfile: src/BehavioralAnticheatEngine.Worker/Dockerfile
+    environment:
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=behavioral_anticheat;Username=postgres;Password=${POSTGRES_PASSWORD:-postgres}
+      Redis__Configuration: redis:6379
+      Kafka__BootstrapServers: redpanda:9092
+      Kafka__BehavioralEventsTopic: behavioral-events
+      Kafka__ConsumerGroupId: behavioral-anticheat-worker
+      Jwt__AccessToken__SigningKey: ${JWT_ACCESS_SIGNING_KEY:-development-access-token-signing-key-change-before-production}
+      Jwt__RefreshToken__SigningKey: ${JWT_REFRESH_SIGNING_KEY:-development-refresh-token-signing-key-change-before-production}
+      OpenTelemetry__OtlpEndpoint: http://otel-lgtm:4317
+      OpenTelemetry__Environment: live-test
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_started
+      otel-lgtm:
+        condition: service_started
+
   client:
     build:
       context: ./client
       dockerfile: Dockerfile
     command: npm run dev -- --host 0.0.0.0
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.client.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.client.entrypoints=web"
+      - "traefik.http.routers.client.priority=1"
+      - "traefik.http.services.client.loadbalancer.server.port=5173"
     ports:
       - "5173:5173"
     volumes:
@@ -11,6 +246,12 @@ services:
       - client_node_modules:/app/node_modules
     environment:
       CHOKIDAR_USEPOLLING: "true"
+      VITE_API_PROXY_TARGET: http://api:8080
+    depends_on:
+      - api
 
 volumes:
+  postgres_data:
+  redpanda_data:
   client_node_modules:
+  otel_lgtm_data:
