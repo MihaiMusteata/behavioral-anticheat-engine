@@ -1,0 +1,157 @@
+# Production compose file for small (resource-constrained) droplets.
+# Core services only - no observability stack (otel-lgtm/Grafana, exporters,
+# cadvisor, kminion) and no dev tooling (redpanda-console). Client is built
+# as a static production bundle served by nginx, not the Vite dev server.
+#
+# Internal services (postgres/redis/redpanda/api/client) are NOT published
+# to the host - only reachable on the internal Docker network. Traefik is
+# the single public entry point, on port 80.
+#
+# Secrets fall back to dev placeholders if no `.env` is present - always
+# provide a real `.env` (copy .env.example) before running this for real.
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: behavioral_anticheat
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d behavioral_anticheat"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--maxmemory", "32mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redpanda:
+    image: redpandadata/redpanda:latest
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - 200M
+      - --reserve-memory
+      - 0M
+      - --node-id
+      - "0"
+      - --check=false
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092,OUTSIDE://0.0.0.0:19092
+      - --advertise-kafka-addr
+      - PLAINTEXT://redpanda:9092,OUTSIDE://localhost:19092
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+
+  traefik:
+    image: traefik:v3.6
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedByDefault=false
+      - --providers.docker.constraints=Label(`com.docker.compose.project`, `${COMPOSE_PROJECT_NAME}`)
+      - --entrypoints.web.address=:80
+      # Every plain-HTTP request is redirected to HTTPS automatically - no
+      # per-service router needed for this, it's handled once here.
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@example.com}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+    depends_on:
+      - api
+      - client
+
+  api:
+    image: bae-api:prod
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`exam.mibo.monster`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.api.priority=100"
+      - "traefik.http.services.api.loadbalancer.server.port=8080"
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=behavioral_anticheat;Username=postgres;Password=${POSTGRES_PASSWORD:-postgres}
+      Redis__Configuration: redis:6379
+      Kafka__BootstrapServers: redpanda:9092
+      Kafka__BehavioralEventsTopic: behavioral-events
+      Kafka__ConsumerGroupId: behavioral-anticheat-worker
+      Jwt__AccessToken__SigningKey: ${JWT_ACCESS_SIGNING_KEY:-development-access-token-signing-key-change-before-production}
+      Jwt__RefreshToken__SigningKey: ${JWT_REFRESH_SIGNING_KEY:-development-refresh-token-signing-key-change-before-production}
+      SeedUsers__0__Email: admin@example.test
+      SeedUsers__0__Password: ${SEED_ADMIN_PASSWORD:-Admin123!}
+      SeedUsers__0__Role: Admin
+      SeedUsers__1__Email: student@example.test
+      SeedUsers__1__Password: ${SEED_STUDENT_PASSWORD:-Student123!}
+      SeedUsers__1__Role: Student
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_started
+
+  worker:
+    image: bae-worker:prod
+    restart: unless-stopped
+    environment:
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=behavioral_anticheat;Username=postgres;Password=${POSTGRES_PASSWORD:-postgres}
+      Redis__Configuration: redis:6379
+      Kafka__BootstrapServers: redpanda:9092
+      Kafka__BehavioralEventsTopic: behavioral-events
+      Kafka__ConsumerGroupId: behavioral-anticheat-worker
+      Jwt__AccessToken__SigningKey: ${JWT_ACCESS_SIGNING_KEY:-development-access-token-signing-key-change-before-production}
+      Jwt__RefreshToken__SigningKey: ${JWT_REFRESH_SIGNING_KEY:-development-refresh-token-signing-key-change-before-production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_started
+
+  client:
+    image: bae-client:prod
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.client.rule=Host(`exam.mibo.monster`) && PathPrefix(`/`)"
+      - "traefik.http.routers.client.entrypoints=websecure"
+      - "traefik.http.routers.client.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.client.priority=1"
+      - "traefik.http.services.client.loadbalancer.server.port=80"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redpanda_data:
+  traefik_letsencrypt:
