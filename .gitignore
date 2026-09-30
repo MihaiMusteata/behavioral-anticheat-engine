@@ -44,7 +44,9 @@ coverage/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+.claude/
 .DS_Store
+dev-history-commits.sh
 *.suo
 *.ntvs*
 *.njsproj
