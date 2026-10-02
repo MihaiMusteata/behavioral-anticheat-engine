@@ -1,5 +1,6 @@
 using System.Reflection;
 using BehavioralAnticheatEngine.Application.Behavior;
+using BehavioralAnticheatEngine.Application.Common.Interfaces;
 using BehavioralAnticheatEngine.Application.Common.Mediation;
 using BehavioralAnticheatEngine.Application.Dashboard;
 using BehavioralAnticheatEngine.Application.Exams;
@@ -14,6 +15,7 @@ public static class DependencyInjection
         services.AddScoped<IAppMediator, AppMediator>();
         services.AddScoped<IExamManagementService, ExamManagementService>();
         services.AddScoped<IExamSessionService, ExamSessionService>();
+        services.AddScoped<ISecureSessionActionUnwrapper, SecureSessionActionUnwrapper>();
         services.AddScoped<IBehavioralIngestionService, BehavioralIngestionService>();
         services.AddScoped<IBehavioralEventProcessingService, BehavioralEventProcessingService>();
         services.AddScoped<IDashboardService, DashboardService>();
