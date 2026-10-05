@@ -51,6 +51,7 @@ export type SessionTimeline = {
     label: string
     prompt: string
     riskScore: number
+    options: Array<{ optionId: string; label: string }>
   }>
   answers: Array<{
     questionId: string

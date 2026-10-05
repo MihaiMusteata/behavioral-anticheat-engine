@@ -12,6 +12,7 @@ import {
   readActiveQuestionIndex,
   saveActiveQuestionIndex,
 } from './examSessionStorage'
+import { saveAnswerSecure, selfReportSecure, submitExamSecure } from './secureSessionActions'
 import type { ExistingAnswer, Question, StartExamSessionResponse, SubmitExamResponse } from './types'
 
 type AnswerValue = string | string[]
@@ -187,10 +188,12 @@ function ExamRunner({
 
     setSaving(true)
     try {
-      await api.put(`/api/student/sessions/${session.sessionId}/answers`, {
-        questionId: question.id,
-        answer: toAnswerPayload(question, answer),
-      })
+      await saveAnswerSecure(
+        session.sessionId,
+        session.behaviorSigningSecret,
+        question.id,
+        toAnswerPayload(question, answer),
+      )
       behavior.record('answer_saved', { questionId: question.id })
       return true
     } catch (error) {
@@ -199,7 +202,7 @@ function ExamRunner({
     } finally {
       setSaving(false)
     }
-  }, [answers, behavior, question, session.sessionId])
+  }, [answers, behavior, question, session.behaviorSigningSecret, session.sessionId])
 
   const persistCurrentAnswerIfPresent = useCallback(async () => {
     if (!isAnswered(question, answers[question.id])) {
@@ -310,8 +313,8 @@ function ExamRunner({
     try {
       endActiveQuestionView()
       await behavior.endSession('submit')
-      const response = await api.post<SubmitExamResponse>(`/api/student/sessions/${session.sessionId}/submit`)
-      setFinalScore(response.data.score)
+      const response = await submitExamSecure<SubmitExamResponse>(session.sessionId, session.behaviorSigningSecret)
+      setFinalScore(response.score)
       submittedRef.current = true
       setSubmitted(true)
       behavior.clearSessionState()
@@ -325,7 +328,7 @@ function ExamRunner({
       submitInProgressRef.current = false
       setSubmitting(false)
     }
-  }, [answers, behavior, endActiveQuestionView, question, saveCurrentAnswer, session.sessionId])
+  }, [answers, behavior, endActiveQuestionView, question, saveCurrentAnswer, session.behaviorSigningSecret, session.sessionId])
 
   useEffect(() => {
     if (remainingMs === 0 && !submitted) {
@@ -336,7 +339,7 @@ function ExamRunner({
   async function answerSelfReport(cheated: boolean) {
     setSelfReportSubmitting(true)
     try {
-      await api.put(`/api/student/sessions/${session.sessionId}/self-report`, { cheated })
+      await selfReportSecure(session.sessionId, session.behaviorSigningSecret, cheated)
     } catch (error) {
       toast.error(getErrorMessage(error))
     } finally {
@@ -380,7 +383,7 @@ function ExamRunner({
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-emerald-700">Question {currentIndex + 1} / {session.assessment.questions.length}</p>
-            <h3 className="mt-1 text-xl font-semibold">{question.prompt}</h3>
+            <h3 className="mt-1 text-xl font-semibold" data-bae-zone="question_prompt">{question.prompt}</h3>
           </div>
           <span className="rounded bg-slate-100 px-2 py-1 text-sm text-slate-700">{question.points} pts</span>
         </div>
@@ -519,7 +522,7 @@ function QuestionAnswer({ question, value, onChange }: { question: Question; val
                 }
               }}
             />
-            <span>{option.label}</span>
+            <span data-bae-zone="question_option" data-option-id={option.id}>{option.label}</span>
           </label>
         )
       })}

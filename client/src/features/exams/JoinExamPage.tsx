@@ -70,8 +70,9 @@ export function JoinExamPage({ onJoined }: { onJoined: () => void }) {
               <ul className="list-disc space-y-1 pl-4">
                 <li>
                   Se colectează: numele introdus, răspunsurile la întrebări, și evenimente comportamentale din timpul testului (schimbarea
-                  ferestrei/tab-ului, copy/paste, ieșire din fullscreen, folosirea devtools, viteza de tastare, perioade de inactivitate), precum
-                  și un răspuns opțional de auto-raportare la finalul testului.
+                  ferestrei/tab-ului, copy/paste, ieșire din fullscreen, folosirea devtools, viteza de tastare, perioade de inactivitate,
+                  poziția cursorului și a derulării paginii la interval regulat, și selectarea textului din enunțul întrebării — nu și din
+                  propriul răspuns), precum și un răspuns opțional de auto-raportare la finalul testului.
                 </li>
                 <li>Scopul colectării este dublu: evaluarea academică (nota) și cercetarea privind detecția comportamentală a fraudei, pentru teza de masterat.</li>
                 <li>Datele sunt accesibile doar coordonatorului testului (profesor/proctor) și autorului tezei.</li>
