@@ -41,6 +41,8 @@
     <Compile Include="Persistence/Migrations/20261002072309_AddSoftDeleteToAssessmentAndExamSchedule.cs" />
     <Compile Include="Persistence/Migrations/20261002092753_AddExamSessionConsentAcceptedAtUtc.Designer.cs" />
     <Compile Include="Persistence/Migrations/20261002092753_AddExamSessionConsentAcceptedAtUtc.cs" />
+    <Compile Include="Persistence/Migrations/20261015115104_MakeGuestPasswordHashNullable.Designer.cs" />
+    <Compile Include="Persistence/Migrations/20261015115104_MakeGuestPasswordHashNullable.cs" />
     <Compile Include="Persistence/Migrations/AppDbContextModelSnapshot.cs" />
     <Compile Include="Persistence/Repositories/BehavioralEventRepository.cs" />
     <Compile Include="Persistence/Repositories/ExamRepository.cs" />

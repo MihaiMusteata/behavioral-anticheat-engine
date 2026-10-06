@@ -564,7 +564,6 @@ namespace BehavioralAnticheatEngine.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(320)");
 
                     b.Property<string>("PasswordHash")
-                        .IsRequired()
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
 

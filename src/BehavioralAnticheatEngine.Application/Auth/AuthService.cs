@@ -64,7 +64,7 @@ public sealed class AuthService : IAuthService
 
         var user = await _users.GetByNormalizedEmailAsync(email.NormalizedValue, cancellationToken);
 
-        if (user is null || !user.IsActive || !_passwordHasher.Verify(request.Password, user.PasswordHash))
+        if (user is null || !user.IsActive || user.PasswordHash is null || !_passwordHasher.Verify(request.Password, user.PasswordHash))
         {
             AppMetrics.AuthAttempts.Add(1, new KeyValuePair<string, object?>("outcome", "failure"));
             throw new ApplicationUnauthorizedException("Invalid email or password.");
@@ -92,11 +92,9 @@ public sealed class AuthService : IAuthService
 
         var now = _timeProvider.GetUtcNow();
         var syntheticEmail = $"guest-{Guid.NewGuid():N}@guest.local";
-        var throwawayPassword = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24));
-        var user = User.Create(
+        var user = User.CreateGuest(
             syntheticEmail,
             syntheticEmail.ToUpperInvariant(),
-            _passwordHasher.Hash(throwawayPassword),
             now,
             UserRoles.Student);
 
