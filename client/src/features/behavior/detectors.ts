@@ -429,6 +429,159 @@ export class PageLifecycleDetector implements BehaviorDetector {
   }
 }
 
+const selectionDebounceMs = 300
+
+// Reports WHICH part of the question (prompt text or an option label) was
+// selected, as a zone + character offsets - never the selected text itself.
+// Selections inside the student's own free-text answer are intentionally
+// never recorded: the answer textarea doesn't expose its internal selection
+// through document.getSelection() in the first place, and the activeElement
+// check below makes that exclusion explicit rather than incidental.
+// Offsets are resolved against Question.Prompt / QuestionOption.Label (both
+// already stored server-side), so a reviewer can reconstruct exactly what
+// was highlighted without the event itself ever carrying selected text.
+export class TextSelectionDetector implements BehaviorDetector {
+  name = 'text-selection'
+  private record: BehaviorRecorder | null = null
+  private timer: number | null = null
+
+  start(record: BehaviorRecorder) {
+    this.record = record
+    document.addEventListener('selectionchange', this.handleSelectionChange)
+  }
+
+  stop() {
+    document.removeEventListener('selectionchange', this.handleSelectionChange)
+    if (this.timer) {
+      window.clearTimeout(this.timer)
+      this.timer = null
+    }
+    this.record = null
+  }
+
+  private handleSelectionChange = () => {
+    if (this.timer) {
+      window.clearTimeout(this.timer)
+    }
+    this.timer = window.setTimeout(this.sampleSelection, selectionDebounceMs)
+  }
+
+  private sampleSelection = () => {
+    this.timer = null
+
+    if (document.activeElement instanceof HTMLTextAreaElement) {
+      return
+    }
+
+    const selection = document.getSelection()
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+      return
+    }
+
+    const text = selection.toString()
+    if (text.length === 0) {
+      return
+    }
+
+    const anchorElement = selection.anchorNode instanceof Element
+      ? selection.anchorNode
+      : selection.anchorNode?.parentElement ?? null
+    const zoneElement = anchorElement?.closest('[data-bae-zone="question_prompt"], [data-bae-zone="question_option"]') ?? null
+    if (!zoneElement) {
+      return
+    }
+
+    const offsets = computeOffsetsWithinElement(zoneElement, selection.getRangeAt(0))
+
+    this.record?.('text_selected', {
+      zone: zoneElement.getAttribute('data-bae-zone'),
+      optionId: zoneElement.getAttribute('data-option-id'),
+      selectionLength: text.length,
+      startOffset: offsets?.start ?? null,
+      endOffset: offsets?.end ?? null,
+    })
+  }
+}
+
+function computeOffsetsWithinElement(container: Node, range: Range): { start: number; end: number } | null {
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
+  let charCount = 0
+  let start: number | null = null
+  let end: number | null = null
+
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const length = node.textContent?.length ?? 0
+    if (start === null && node === range.startContainer) {
+      start = charCount + range.startOffset
+    }
+    if (end === null && node === range.endContainer) {
+      end = charCount + range.endOffset
+    }
+    charCount += length
+  }
+
+  return start === null || end === null ? null : { start, end }
+}
+
+const heartbeatIntervalMs = 8000
+
+// Fixed-interval sample of continuous state (idle time, window/devtools gap,
+// pointer position, scroll). Unlike the threshold-gated detectors above
+// (idle_detected, devtools_heuristic_triggered), this never discards
+// sub-threshold state - it is the one event type that gives a regularly
+// sampled signal per session, so any future analysis (e.g. different idle
+// thresholds, or timeseries algorithms that need a fixed interval) can be
+// recomputed from stored data without collecting a new dataset.
+export class StateHeartbeatDetector implements BehaviorDetector {
+  name = 'state-heartbeat'
+  private record: BehaviorRecorder | null = null
+  private timer: number | null = null
+  private lastActivityAt = Date.now()
+  private mouseX: number | null = null
+  private mouseY: number | null = null
+
+  start(record: BehaviorRecorder) {
+    this.record = record
+    this.lastActivityAt = Date.now()
+    window.addEventListener('pointerdown', this.markActivity)
+    window.addEventListener('keydown', this.markActivity)
+    window.addEventListener('mousemove', this.trackMouse)
+    this.timer = window.setInterval(this.sample, heartbeatIntervalMs)
+  }
+
+  stop() {
+    window.removeEventListener('pointerdown', this.markActivity)
+    window.removeEventListener('keydown', this.markActivity)
+    window.removeEventListener('mousemove', this.trackMouse)
+    if (this.timer) {
+      window.clearInterval(this.timer)
+      this.timer = null
+    }
+    this.record = null
+  }
+
+  private markActivity = () => {
+    this.lastActivityAt = Date.now()
+  }
+
+  private trackMouse = (event: MouseEvent) => {
+    this.mouseX = event.clientX
+    this.mouseY = event.clientY
+    this.markActivity()
+  }
+
+  private sample = () => {
+    this.record?.('state_heartbeat', {
+      idleMs: Date.now() - this.lastActivityAt,
+      windowGapWidth: window.outerWidth - window.innerWidth,
+      windowGapHeight: window.outerHeight - window.innerHeight,
+      mouseX: this.mouseX,
+      mouseY: this.mouseY,
+      scrollY: window.scrollY,
+    })
+  }
+}
+
 function getSelectionLength(target: EventTarget | null) {
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
     const start = target.selectionStart
@@ -460,5 +613,7 @@ export function createDefaultDetectors(sessionId: string): BehaviorDetector[] {
     new MultiTabDetector(sessionId),
     new ConnectionDetector(),
     new PageLifecycleDetector(),
+    new StateHeartbeatDetector(),
+    new TextSelectionDetector(),
   ]
 }

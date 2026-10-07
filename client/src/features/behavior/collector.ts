@@ -1,16 +1,19 @@
 import axios from 'axios'
 import { api, getAccessToken, resolveApiUrl } from '../../lib/api'
+import {
+  base64UrlToBytes,
+  deriveSessionKeys,
+  encryptPayload,
+  generateNonce,
+  signEnvelope,
+  type SessionCryptoKeys,
+} from '../../lib/secureEnvelope'
 import type { BehaviorContext, BehaviorEventDraft, BehaviorEventEnvelope, BehaviorPayload } from './types'
 
 type QueuedBehaviorEvent = BehaviorEventDraft & {
   seq: number
   timestampMs: number
   nonce: string
-}
-
-type BehaviorCryptoKeys = {
-  signingKey: CryptoKey
-  encryptionKey: CryptoKey
 }
 
 type BehavioralEventResult = {
@@ -35,7 +38,7 @@ export class BehaviorEventCollector {
   private seq: number
   private readonly seqStorageKey: string
   private readonly sessionId: string
-  private readonly keys: Promise<BehaviorCryptoKeys>
+  private readonly keys: Promise<SessionCryptoKeys>
   private context: BehaviorContext = {}
   private flushPromise: Promise<void> | null = null
   private preferKeepalive = false
@@ -44,7 +47,7 @@ export class BehaviorEventCollector {
 
   constructor(sessionId: string, sessionSecret: string) {
     this.sessionId = sessionId
-    this.keys = deriveBehaviorKeys(sessionSecret)
+    this.keys = deriveSessionKeys(sessionSecret)
     this.seqStorageKey = `bae.seq.${sessionId}`
     const storedSeq = Number(sessionStorage.getItem(this.seqStorageKey) ?? '0')
     this.seq = Number.isSafeInteger(storedSeq) && storedSeq >= 0 ? storedSeq : 0
@@ -187,7 +190,7 @@ export class BehaviorEventCollector {
     }
     const keys = await this.keys
     const nonceBytes = base64UrlToBytes(event.nonce)
-    const data = await encryptEventData(eventData, keys.encryptionKey, nonceBytes)
+    const data = await encryptPayload(eventData, keys.encryptionKey, nonceBytes)
     const signature = await signEnvelope(this.sessionId, event.seq, event.timestampMs, event.nonce, data, keys.signingKey)
 
     return {
@@ -283,104 +286,3 @@ function reportCollectorError(error: unknown) {
   console.error('Behavioral event flush failed; queued events will be retried.', error)
 }
 
-async function signEnvelope(
-  sessionId: string,
-  seq: number,
-  timestampMs: number,
-  nonce: string,
-  data: string,
-  signingKey: CryptoKey,
-) {
-  const material = [
-    sessionId.replaceAll('-', ''),
-    String(seq),
-    String(timestampMs),
-    nonce,
-    data,
-  ].join('.')
-  const signature = await crypto.subtle.sign('HMAC', signingKey, new TextEncoder().encode(material))
-
-  return bytesToBase64(new Uint8Array(signature))
-}
-
-async function encryptEventData(data: object, encryptionKey: CryptoKey, nonce: Uint8Array) {
-  const encoded = new TextEncoder().encode(JSON.stringify(data))
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: toArrayBuffer(nonce) },
-    encryptionKey,
-    toArrayBuffer(encoded),
-  )
-
-  return bytesToBase64Url(new Uint8Array(ciphertext))
-}
-
-async function deriveBehaviorKeys(sessionSecret: string): Promise<BehaviorCryptoKeys> {
-  const baseKey = await crypto.subtle.importKey('raw', toArrayBuffer(decodeSessionSecret(sessionSecret)), 'HKDF', false, ['deriveKey'])
-  const salt = new Uint8Array(32)
-  const signingInfo = new TextEncoder().encode('signing')
-  const encryptionInfo = new TextEncoder().encode('encryption')
-
-  const signingKey = await crypto.subtle.deriveKey(
-    { name: 'HKDF', hash: 'SHA-256', salt: toArrayBuffer(salt), info: toArrayBuffer(signingInfo) },
-    baseKey,
-    { name: 'HMAC', hash: 'SHA-256', length: 256 },
-    false,
-    ['sign'],
-  )
-
-  const encryptionKey = await crypto.subtle.deriveKey(
-    { name: 'HKDF', hash: 'SHA-256', salt: toArrayBuffer(salt), info: toArrayBuffer(encryptionInfo) },
-    baseKey,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt'],
-  )
-
-  return { signingKey, encryptionKey }
-}
-
-function decodeSessionSecret(sessionSecret: string) {
-  try {
-    return base64ToBytes(sessionSecret)
-  } catch {
-    return new TextEncoder().encode(sessionSecret)
-  }
-}
-
-function generateNonce() {
-  const bytes = new Uint8Array(12)
-  crypto.getRandomValues(bytes)
-  return bytesToBase64Url(bytes)
-}
-
-function bytesToBase64(bytes: Uint8Array) {
-  let binary = ''
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte)
-  })
-
-  return btoa(binary)
-}
-
-function bytesToBase64Url(bytes: Uint8Array) {
-  return bytesToBase64(bytes).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
-}
-
-function base64UrlToBytes(value: string) {
-  const normalized = value.replaceAll('-', '+').replaceAll('_', '/')
-  return base64ToBytes(normalized.padEnd(normalized.length + ((4 - normalized.length % 4) % 4), '='))
-}
-
-function base64ToBytes(value: string) {
-  const binary = atob(value)
-  const bytes = new Uint8Array(binary.length)
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index)
-  }
-
-  return bytes
-}
-
-function toArrayBuffer(bytes: Uint8Array) {
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
-}
