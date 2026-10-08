@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using BehavioralAnticheatEngine.Application.Behavior.Contracts;
 using BehavioralAnticheatEngine.Application.Common.Interfaces;
+using BehavioralAnticheatEngine.Application.Common.Security;
 using BehavioralAnticheatEngine.Application.Observability;
 using BehavioralAnticheatEngine.Domain.Exams;
 using Microsoft.Extensions.Logging;
@@ -12,12 +12,9 @@ namespace BehavioralAnticheatEngine.Application.Behavior;
 
 public sealed class BehavioralIngestionService : IBehavioralIngestionService
 {
-    private const int AesGcmNonceSizeBytes = 12;
     private const int AesGcmTagSizeBytes = 16;
-    private const int DerivedKeySizeBytes = 32;
     private const int MaxEventTypeLength = 128;
     private const int MaxDecryptedDataSizeBytes = 64 * 1024;
-    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
     private readonly IExamRepository _exams;
     private readonly IExamSessionSecretStore _sessionSecrets;
@@ -162,19 +159,19 @@ public sealed class BehavioralIngestionService : IBehavioralIngestionService
             return Reject(envelope.Seq, "session_secret_missing");
         }
 
-        if (!VerifySignature(envelope, secret))
+        if (!SecureEnvelopeCrypto.VerifySignature(envelope.SessionId, envelope.Seq, envelope.Timestamp, envelope.Nonce, envelope.Data, envelope.Signature, secret))
         {
             await PublishValidationIncidentAsync(session, envelope, "invalid_signature", now, cancellationToken);
             return Reject(envelope.Seq, "invalid_signature");
         }
 
-        if (!TryDecodeBase64Url(envelope.Nonce, out var decodedNonce) || decodedNonce.Length != AesGcmNonceSizeBytes)
+        if (!SecureEnvelopeCrypto.TryDecodeBase64Url(envelope.Nonce, out var decodedNonce) || decodedNonce.Length != SecureEnvelopeCrypto.AesGcmNonceSizeBytes)
         {
             await PublishValidationIncidentAsync(session, envelope, "invalid_nonce", now, cancellationToken);
             return Reject(envelope.Seq, "invalid_nonce");
         }
 
-        if (!TryDecodeBase64Url(envelope.Data, out var decodedData) ||
+        if (!SecureEnvelopeCrypto.TryDecodeBase64Url(envelope.Data, out var decodedData) ||
             decodedData.Length <= AesGcmTagSizeBytes ||
             decodedData.Length > MaxDecryptedDataSizeBytes + AesGcmTagSizeBytes)
         {
@@ -269,66 +266,18 @@ public sealed class BehavioralIngestionService : IBehavioralIngestionService
         return new BehavioralEventResult(envelope.Seq, true, null, flags);
     }
 
-    public static string CreateSignatureMaterial(BehavioralEventEnvelope envelope)
-    {
-        return string.Join(
-            ".",
-            envelope.SessionId.ToString("N"),
-            envelope.Seq.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            envelope.Timestamp.ToUnixTimeMilliseconds().ToString(System.Globalization.CultureInfo.InvariantCulture),
-            envelope.Nonce,
-            envelope.Data);
-    }
-
-    private static bool VerifySignature(BehavioralEventEnvelope envelope, string secret)
-    {
-        try
-        {
-            var expected = HMACSHA256.HashData(
-                DeriveKey(secret, "signing"),
-                Encoding.UTF8.GetBytes(CreateSignatureMaterial(envelope)));
-            var actual = Convert.FromBase64String(envelope.Signature);
-
-            return actual.Length == expected.Length && CryptographicOperations.FixedTimeEquals(actual, expected);
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
-    }
-
     private static DecryptedBehavioralEventData? TryDecryptEventData(
         BehavioralEventEnvelope envelope,
         string secret,
         out string failureReason)
     {
-        failureReason = "unknown";
+        if (!SecureEnvelopeCrypto.TryDecrypt(envelope.Nonce, envelope.Data, secret, MaxDecryptedDataSizeBytes, out var payloadJson, out failureReason))
+        {
+            return null;
+        }
 
         try
         {
-            if (!TryDecodeBase64Url(envelope.Nonce, out var nonce) || nonce.Length != AesGcmNonceSizeBytes)
-            {
-                failureReason = "invalid_nonce";
-                return null;
-            }
-
-            if (!TryDecodeBase64Url(envelope.Data, out var encrypted) ||
-                encrypted.Length <= AesGcmTagSizeBytes ||
-                encrypted.Length > MaxDecryptedDataSizeBytes + AesGcmTagSizeBytes)
-            {
-                failureReason = "invalid_encrypted_data";
-                return null;
-            }
-
-            var ciphertext = encrypted[..^AesGcmTagSizeBytes];
-            var tag = encrypted[^AesGcmTagSizeBytes..];
-            var plaintext = new byte[ciphertext.Length];
-            var encryptionKey = DeriveKey(secret, "encryption");
-
-            using var aes = new AesGcm(encryptionKey, AesGcmTagSizeBytes);
-            aes.Decrypt(nonce, ciphertext, tag, plaintext);
-
-            var payloadJson = StrictUtf8.GetString(plaintext);
             using var document = JsonDocument.Parse(
                 payloadJson,
                 new JsonDocumentOptions { MaxDepth = 32, CommentHandling = JsonCommentHandling.Disallow });
@@ -364,19 +313,9 @@ public sealed class BehavioralIngestionService : IBehavioralIngestionService
             failureReason = string.Empty;
             return new DecryptedBehavioralEventData(eventType, questionId, payloadJson);
         }
-        catch (Exception exception) when (exception is
-            ArgumentException or
-            CryptographicException or
-            FormatException or
-            InvalidOperationException or
-            JsonException)
+        catch (JsonException)
         {
-            failureReason = exception switch
-            {
-                CryptographicException => "aes_gcm_authentication_failed",
-                JsonException => "invalid_event_json",
-                _ => "invalid_event_encoding"
-            };
+            failureReason = "invalid_event_json";
             return null;
         }
     }
@@ -435,7 +374,7 @@ public sealed class BehavioralIngestionService : IBehavioralIngestionService
             session.StudentId,
             serverSeq,
             now,
-            Convert.ToBase64String(RandomNumberGenerator.GetBytes(AesGcmNonceSizeBytes)),
+            Convert.ToBase64String(RandomNumberGenerator.GetBytes(SecureEnvelopeCrypto.AesGcmNonceSizeBytes)),
             null,
             eventType,
             payloadJson,
@@ -444,65 +383,6 @@ public sealed class BehavioralIngestionService : IBehavioralIngestionService
             now);
 
         await _publisher.PublishAsync(systemEvent, cancellationToken);
-    }
-
-    private static byte[] DeriveKey(string secret, string info)
-    {
-        var inputKeyingMaterial = DecodeSessionSecret(secret);
-        using var extract = new HMACSHA256(new byte[32]);
-        var pseudorandomKey = extract.ComputeHash(inputKeyingMaterial);
-        using var expand = new HMACSHA256(pseudorandomKey);
-
-        var infoBytes = Encoding.UTF8.GetBytes(info);
-        var blockInput = new byte[infoBytes.Length + 1];
-        Buffer.BlockCopy(infoBytes, 0, blockInput, 0, infoBytes.Length);
-        blockInput[^1] = 1;
-
-        return expand.ComputeHash(blockInput)[..DerivedKeySizeBytes];
-    }
-
-    private static byte[] DecodeSessionSecret(string secret)
-    {
-        try
-        {
-            return Convert.FromBase64String(secret);
-        }
-        catch (FormatException)
-        {
-            return Encoding.UTF8.GetBytes(secret);
-        }
-    }
-
-    private static bool TryDecodeBase64Url(string value, out byte[] bytes)
-    {
-        bytes = [];
-        if (string.IsNullOrWhiteSpace(value) ||
-            value.Length % 4 == 1 ||
-            value.Any(character => !(
-                character is >= 'a' and <= 'z' or
-                    >= 'A' and <= 'Z' or
-                    >= '0' and <= '9' or
-                    '-' or '_')))
-        {
-            return false;
-        }
-
-        var normalized = value.Replace('-', '+').Replace('_', '/');
-        var padding = normalized.Length % 4;
-        if (padding > 0)
-        {
-            normalized = normalized.PadRight(normalized.Length + 4 - padding, '=');
-        }
-
-        try
-        {
-            bytes = Convert.FromBase64String(normalized);
-            return true;
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
     }
 
     private static BehavioralEventResult Reject(long seq, string reason)

@@ -32,6 +32,7 @@ public static class DependencyInjection
 
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
         services.Configure<BehavioralIngestionOptions>(configuration.GetSection(BehavioralIngestionOptions.SectionName));
+        services.Configure<SecureActionOptions>(configuration.GetSection(SecureActionOptions.SectionName));
         services.Configure<RedisOptions>(configuration.GetSection(RedisOptions.SectionName));
         services.Configure<KafkaOptions>(configuration.GetSection(KafkaOptions.SectionName));
 
