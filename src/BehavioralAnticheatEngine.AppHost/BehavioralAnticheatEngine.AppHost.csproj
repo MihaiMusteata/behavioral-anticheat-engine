@@ -9,7 +9,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.1.2" />
+    <PackageReference Include="Aspire.Hosting.Redis" Version="13.1.2" />
+    <PackageReference Include="MessagePack" Version="2.5.301" />
+    <PackageReference Include="MessagePack.Annotations" Version="2.5.301" />
     <ProjectReference Include="..\BehavioralAnticheatEngine.Api\BehavioralAnticheatEngine.Api.csproj" />
+    <ProjectReference Include="..\BehavioralAnticheatEngine.Worker\BehavioralAnticheatEngine.Worker.csproj" />
   </ItemGroup>
 
 </Project>
