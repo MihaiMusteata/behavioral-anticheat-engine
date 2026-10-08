@@ -1,0 +1,14 @@
+version: 2
+
+# False positives in docker-compose.prod.yml: these are Compose variable
+# substitution fallbacks (${VAR:-default}), not real credentials. Real
+# secrets are injected at runtime from a server-side .env file that is
+# never committed.
+secret:
+  ignored-matches:
+    - name: docker-compose.prod.yml postgres dev fallback
+      match: postgres
+    - name: docker-compose.prod.yml admin seed dev fallback
+      match: Admin123!
+    - name: docker-compose.prod.yml student seed dev fallback
+      match: Student123!
