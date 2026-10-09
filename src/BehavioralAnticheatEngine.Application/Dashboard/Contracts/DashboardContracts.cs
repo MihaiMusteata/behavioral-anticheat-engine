@@ -67,7 +67,10 @@ public sealed record TimelineQuestionDto(
     int OrderIndex,
     string Label,
     string Prompt,
-    double RiskScore);
+    double RiskScore,
+    IReadOnlyCollection<TimelineQuestionOptionDto> Options);
+
+public sealed record TimelineQuestionOptionDto(Guid OptionId, string Label);
 
 public sealed record LiveSessionState(
     Guid ExamScheduleId,

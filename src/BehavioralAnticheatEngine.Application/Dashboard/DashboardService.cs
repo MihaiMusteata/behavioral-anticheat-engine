@@ -101,7 +101,11 @@ public sealed class DashboardService : IDashboardService
                 question.OrderIndex,
                 $"Question {question.OrderIndex}",
                 question.Prompt,
-                questionScore.Score));
+                questionScore.Score,
+                question.Options
+                    .OrderBy(option => option.OrderIndex)
+                    .Select(option => new TimelineQuestionOptionDto(option.Id, option.Label))
+                    .ToArray()));
         }
 
         double? selectedQuestionRiskScore = null;

@@ -1179,6 +1179,9 @@ function SessionDetail({ timeline, onScored }: { timeline: SessionTimeline; onSc
               </div>
               <p className="text-xs text-slate-500">{formatDate(getEventChronologyTimestamp(event))} {event.validationFlags ? `· ${event.validationFlags}` : ''}</p>
               <p className="mt-1 text-sm text-slate-700">{getEventDetail(event)}</p>
+              {event.eventType === 'text_selected' ? (
+                <TextSelectionHighlight event={event} timeline={activeTimeline} />
+              ) : null}
             </div>
           ))}
         </div>
@@ -1431,6 +1434,41 @@ const eventLabels: Record<string, string> = {
   event_sequence_gap: 'Sequence gap',
   event_validation_failed: 'Validation failed',
   event_silence_detected: 'Event silence detected',
+}
+
+// Reconstructs the yellow highlight for a text_selected event, combining its
+// stored zone + character offsets with content already known to the
+// dashboard (the question prompt or an option label) - the event itself
+// never carries the selected text.
+function TextSelectionHighlight({ event, timeline }: { event: TimelineEvent; timeline: SessionTimeline }) {
+  const payload = parsePayload(event.payloadJson)
+  const zone = readString(payload, 'zone')
+  const optionId = readString(payload, 'optionId')
+  const startOffset = readFiniteNumber(payload, 'startOffset')
+  const endOffset = readFiniteNumber(payload, 'endOffset')
+
+  if (startOffset === null || endOffset === null || startOffset < 0 || startOffset >= endOffset) {
+    return null
+  }
+
+  const question = timeline.questions.find((candidate) => candidate.questionId === event.questionId)
+  const sourceText = zone === 'question_option'
+    ? question?.options.find((option) => option.optionId === optionId)?.label
+    : zone === 'question_prompt'
+      ? question?.prompt
+      : undefined
+
+  if (!sourceText || endOffset > sourceText.length) {
+    return null
+  }
+
+  return (
+    <p className="mt-1 rounded bg-slate-50 p-2 text-sm text-slate-800">
+      {sourceText.slice(0, startOffset)}
+      <mark className="rounded bg-yellow-300 px-0.5">{sourceText.slice(startOffset, endOffset)}</mark>
+      {sourceText.slice(endOffset)}
+    </p>
+  )
 }
 
 function getEventLabel(eventType: string) {
