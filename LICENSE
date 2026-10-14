@@ -1,0 +1,28 @@
+Copyright (c) 2026 Mihai Musteata (GitHub: @MihaiMusteata)
+
+All Rights Reserved.
+
+This repository's source code - including, without limitation, all files
+under `src/`, `client/`, `scripts/`, configuration files, and any other
+code or content not explicitly covered by a separate license file in a
+subdirectory - is published publicly for academic evaluation and review
+purposes only, as part of a master's thesis submission.
+
+No permission is granted to any person to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of this source code,
+in whole or in part, for any purpose, without the prior written consent
+of the copyright holder.
+
+Viewing or forking this repository does not constitute a license to use,
+reproduce, or redistribute its contents.
+
+The dataset files described in `datasets/README.md` are an explicit
+exception to this notice and are licensed separately and more
+permissively - see `datasets/LICENSE`.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

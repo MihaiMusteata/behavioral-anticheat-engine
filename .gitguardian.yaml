@@ -6,9 +6,15 @@ version: 2
 # never committed.
 secret:
   ignored-matches:
-    - name: docker-compose.prod.yml postgres dev fallback
+    - name: docker-compose postgres dev fallback
       match: postgres
-    - name: docker-compose.prod.yml admin seed dev fallback
+    - name: docker-compose admin seed dev fallback
       match: Admin123!
-    - name: docker-compose.prod.yml student seed dev fallback
+    - name: docker-compose student seed dev fallback
       match: Student123!
+    - name: docker-compose JWT access token dev fallback (self-describing placeholder, never a real key)
+      match: development-access-token-signing-key-change-before-production
+    - name: docker-compose JWT refresh token dev fallback (self-describing placeholder, never a real key)
+      match: development-refresh-token-signing-key-change-before-production
+    - name: docker-compose Grafana admin dev fallback (self-describing placeholder, never a real password)
+      match: changeme-before-live-test
