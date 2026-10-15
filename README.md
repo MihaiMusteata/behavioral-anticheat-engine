@@ -1,3 +1,8 @@
+## License
+
+Source code: all rights reserved — see [`LICENSE`](LICENSE).
+Dataset files (`datasets/`): CC BY 4.0 (open, attribution required) — see [`datasets/LICENSE`](datasets/LICENSE).
+
 # Servicii Docker
 
 | Serviciu | Ce face | Link acces |
