@@ -4,7 +4,7 @@ import QRCode from 'qrcode'
 import { toast } from 'react-toastify'
 import { api, getAccessToken, getErrorMessage, resolveApiUrl } from '../../lib/api'
 import { Shell } from '../../shared/Shell'
-import type { Assessment, AssessmentSummary, ExamSchedule, Question, QuestionType } from '../exams/types'
+import type { AntiCaptureMode, Assessment, AssessmentSummary, ExamSchedule, Question, QuestionType } from '../exams/types'
 import type { DashboardLiveEvent, DashboardSessionRow, ExamDashboard, SessionTimeline, TimelineEvent } from './types'
 
 type Tab = 'tests' | 'exams' | 'dashboard'
@@ -431,6 +431,7 @@ function ExamSchedulesPanel({
   const [assessmentId, setAssessmentId] = useState('')
   const [name, setName] = useState('')
   const [durationMinutes, setDurationMinutes] = useState(45)
+  const [antiCaptureMode, setAntiCaptureMode] = useState<AntiCaptureMode>('none')
   const [starting, setStarting] = useState(false)
   const activeAssessmentId = assessmentId || assessments[0]?.id || ''
 
@@ -439,6 +440,7 @@ function ExamSchedulesPanel({
     setAssessmentId('')
     setName('')
     setDurationMinutes(45)
+    setAntiCaptureMode('none')
   }
 
   function editExam(exam: ExamSchedule) {
@@ -446,14 +448,15 @@ function ExamSchedulesPanel({
     setAssessmentId(exam.assessmentId)
     setName(exam.name)
     setDurationMinutes(exam.durationMinutes)
+    setAntiCaptureMode(exam.antiCaptureMode)
   }
 
   async function saveExam() {
     try {
       if (editingExamId) {
-        await api.put(`/api/exams/${editingExamId}`, { name, durationMinutes })
+        await api.put(`/api/exams/${editingExamId}`, { name, durationMinutes, antiCaptureMode })
       } else {
-        await api.post('/api/exams', { assessmentId: activeAssessmentId, name, durationMinutes })
+        await api.post('/api/exams', { assessmentId: activeAssessmentId, name, durationMinutes, antiCaptureMode })
       }
       toast.success('Exam schedule saved.')
       resetForm()
@@ -468,9 +471,9 @@ function ExamSchedulesPanel({
     try {
       let examId = editingExamId
       if (examId) {
-        await api.put(`/api/exams/${examId}`, { name, durationMinutes })
+        await api.put(`/api/exams/${examId}`, { name, durationMinutes, antiCaptureMode })
       } else {
-        const response = await api.post<ExamSchedule>('/api/exams', { assessmentId: activeAssessmentId, name, durationMinutes })
+        const response = await api.post<ExamSchedule>('/api/exams', { assessmentId: activeAssessmentId, name, durationMinutes, antiCaptureMode })
         examId = response.data.id
       }
 
@@ -529,6 +532,18 @@ function ExamSchedulesPanel({
               value={durationMinutes}
               onChange={(event) => setDurationMinutes(Number(event.target.value))}
             />
+          </label>
+          <label className="block text-sm font-medium text-slate-700">
+            Anti-capture mode
+            <select
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+              value={antiCaptureMode}
+              onChange={(event) => setAntiCaptureMode(event.target.value as AntiCaptureMode)}
+            >
+              <option value="none">None</option>
+              <option value="prompt_injection_honeypot">Prompt-injection honeypot (hidden text, invisible to students, targets AI overlays reading the DOM)</option>
+              <option value="temporal_mask">Temporal mask (experimental, flickers — not recommended, see thesis notes)</option>
+            </select>
           </label>
           <p className="text-xs text-slate-500">
             Participation is open to anyone with the access code — no student roster needed. Starts/ends are set automatically from this
@@ -1171,19 +1186,30 @@ function SessionDetail({ timeline, onScored }: { timeline: SessionTimeline; onSc
         </div>
 
         <div className="max-h-[520px] space-y-2 overflow-auto">
-          {visibleEvents.map((event) => (
-            <div key={event.id} className="rounded-md border border-slate-200 p-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="font-medium">{getEventLabel(event.eventType)}</p>
-                <span className="text-xs text-slate-500">#{event.seq}</span>
+          {visibleEvents.map((event) => {
+            const isHighSeverity = highSeverityEventTypes.has(event.eventType)
+            return (
+              <div
+                key={event.id}
+                className={`rounded-md border p-3 ${isHighSeverity ? 'border-rose-400 bg-rose-50' : 'border-slate-200'}`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className={`flex items-center gap-1 font-medium ${isHighSeverity ? 'text-rose-800' : ''}`}>
+                    {isHighSeverity ? <Icon icon="mdi:alert-octagon" className="h-4 w-4 text-rose-600" /> : null}
+                    {getEventLabel(event.eventType)}
+                  </p>
+                  <span className={`text-xs ${isHighSeverity ? 'text-rose-600' : 'text-slate-500'}`}>#{event.seq}</span>
+                </div>
+                <p className={`text-xs ${isHighSeverity ? 'text-rose-600' : 'text-slate-500'}`}>
+                  {formatDate(getEventChronologyTimestamp(event))} {event.validationFlags ? `· ${event.validationFlags}` : ''}
+                </p>
+                <p className={`mt-1 text-sm ${isHighSeverity ? 'text-rose-800' : 'text-slate-700'}`}>{getEventDetail(event)}</p>
+                {event.eventType === 'text_selected' ? (
+                  <TextSelectionHighlight event={event} timeline={activeTimeline} />
+                ) : null}
               </div>
-              <p className="text-xs text-slate-500">{formatDate(getEventChronologyTimestamp(event))} {event.validationFlags ? `· ${event.validationFlags}` : ''}</p>
-              <p className="mt-1 text-sm text-slate-700">{getEventDetail(event)}</p>
-              {event.eventType === 'text_selected' ? (
-                <TextSelectionHighlight event={event} timeline={activeTimeline} />
-              ) : null}
-            </div>
-          ))}
+            )
+          })}
         </div>
       </section>
     </section>
@@ -1434,7 +1460,16 @@ const eventLabels: Record<string, string> = {
   event_sequence_gap: 'Sequence gap',
   event_validation_failed: 'Validation failed',
   event_silence_detected: 'Event silence detected',
+  ai_honeypot_triggered: 'AI honeypot triggered',
+  bot_activity_suspected: 'Bot activity suspected',
+  render_stats: 'Render stats',
 }
+
+// Event types severe enough to flag in red in the timeline - both are
+// near-impossible for a human to trigger by accident (an invisible,
+// off-screen element only a script would click; a selection made with the
+// mouse resting somewhere other than the clicked option).
+const highSeverityEventTypes = new Set(['ai_honeypot_triggered', 'bot_activity_suspected'])
 
 // Reconstructs the yellow highlight for a text_selected event, combining its
 // stored zone + character offsets with content already known to the
@@ -1564,6 +1599,26 @@ function getEventDetail(event: TimelineEvent) {
     parts.push(`position ${x ?? '?'}×${y ?? '?'}`)
     consumed.add('x')
     consumed.add('y')
+  }
+
+  const mouseX = readFiniteNumber(payload, 'mouseX')
+  const mouseY = readFiniteNumber(payload, 'mouseY')
+  if (mouseX !== null || mouseY !== null) {
+    parts.push(mouseX === null && mouseY === null ? 'mouse never moved on page' : `mouse at (${mouseX ?? '?'}, ${mouseY ?? '?'})`)
+    consumed.add('mouseX')
+    consumed.add('mouseY')
+  }
+
+  const targetLeft = readFiniteNumber(payload, 'targetLeft')
+  const targetTop = readFiniteNumber(payload, 'targetTop')
+  const targetRight = readFiniteNumber(payload, 'targetRight')
+  const targetBottom = readFiniteNumber(payload, 'targetBottom')
+  if (targetLeft !== null && targetTop !== null && targetRight !== null && targetBottom !== null) {
+    parts.push(`option button was at (${targetLeft}, ${targetTop})-(${targetRight}, ${targetBottom})`)
+    consumed.add('targetLeft')
+    consumed.add('targetTop')
+    consumed.add('targetRight')
+    consumed.add('targetBottom')
   }
 
   appendNumber('clientSeq', (value) => `client seq ${value}`)

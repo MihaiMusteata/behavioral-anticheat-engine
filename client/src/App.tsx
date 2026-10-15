@@ -6,8 +6,15 @@ import { useAuth } from './features/auth/auth-context'
 import { AdminApp } from './features/dashboard/AdminApp'
 import { JoinExamPage } from './features/exams/JoinExamPage'
 import { StudentApp } from './features/exams/StudentApp'
+import { TemporalMaskHarness } from './features/exams/TemporalMaskHarness'
 
 function App() {
+  // Test-only escape hatch for e2e coverage of TemporalMaskText - bypasses
+  // auth entirely, mirrors the existing ?staff pattern below.
+  if (new URLSearchParams(window.location.search).has('maskHarness')) {
+    return <TemporalMaskHarness />
+  }
+
   return (
     <AuthProvider>
       <AppRoutes />

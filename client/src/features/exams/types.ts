@@ -1,5 +1,7 @@
 export type QuestionType = 'single_choice' | 'multiple_choice' | 'free_text'
 
+export type AntiCaptureMode = 'none' | 'temporal_mask' | 'prompt_injection_honeypot'
+
 export type QuestionOption = {
   id: string
   label: string
@@ -38,6 +40,7 @@ export type ExamSchedule = {
   endsAtUtc: string | null
   status: string
   accessPinCode: string
+  antiCaptureMode: AntiCaptureMode
 }
 
 export type StudentAssessment = {
@@ -61,6 +64,7 @@ export type StartExamSessionResponse = {
   behaviorSigningSecret: string
   assessment: StudentAssessment
   existingAnswers: ExistingAnswer[]
+  antiCaptureMode: AntiCaptureMode
 }
 
 export type GuestJoinResponse = {
