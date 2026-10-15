@@ -11,7 +11,8 @@ public sealed record StartExamSessionResponse(
     DateTimeOffset ServerTimeUtc,
     string BehaviorSigningSecret,
     StudentAssessmentDto Assessment,
-    IReadOnlyCollection<ExistingAnswerDto> ExistingAnswers);
+    IReadOnlyCollection<ExistingAnswerDto> ExistingAnswers,
+    string AntiCaptureMode);
 
 public sealed record ExistingAnswerDto(Guid QuestionId, string AnswerJson);
 

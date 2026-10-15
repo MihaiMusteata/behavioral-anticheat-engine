@@ -2,6 +2,15 @@ using System.Security.Cryptography;
 
 namespace BehavioralAnticheatEngine.Domain.Exams;
 
+public static class AntiCaptureModes
+{
+    public const string None = "none";
+    public const string TemporalMask = "temporal_mask";
+    public const string PromptInjectionHoneypot = "prompt_injection_honeypot";
+
+    public static readonly IReadOnlyCollection<string> All = [None, TemporalMask, PromptInjectionHoneypot];
+}
+
 public sealed class ExamSchedule
 {
     private ExamSchedule()
@@ -25,6 +34,7 @@ public sealed class ExamSchedule
         CreatedByUserId = createdByUserId;
         CreatedAtUtc = createdAtUtc;
         Status = ExamStatuses.Scheduled;
+        AntiCaptureMode = AntiCaptureModes.None;
     }
 
     public Guid Id { get; private set; }
@@ -42,6 +52,8 @@ public sealed class ExamSchedule
     public string? AccessPinCode { get; private set; }
 
     public string Status { get; private set; } = ExamStatuses.Scheduled;
+
+    public string AntiCaptureMode { get; private set; } = AntiCaptureModes.None;
 
     public Guid CreatedByUserId { get; private set; }
 
@@ -90,6 +102,16 @@ public sealed class ExamSchedule
 
         Name = name.Trim();
         DurationMinutes = durationMinutes;
+    }
+
+    public void SetAntiCaptureMode(string mode)
+    {
+        if (!AntiCaptureModes.All.Contains(mode))
+        {
+            throw new ArgumentException($"Unknown anti-capture mode '{mode}'.", nameof(mode));
+        }
+
+        AntiCaptureMode = mode;
     }
 
     public void Start(DateTimeOffset startedAtUtc)

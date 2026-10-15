@@ -150,6 +150,11 @@ public sealed class ExamManagementService : IExamManagementService
             actorUserId,
             _timeProvider.GetUtcNow());
 
+        if (!string.IsNullOrWhiteSpace(request.AntiCaptureMode))
+        {
+            schedule.SetAntiCaptureMode(request.AntiCaptureMode);
+        }
+
         await _exams.AddExamScheduleAsync(schedule, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -165,6 +170,11 @@ public sealed class ExamManagementService : IExamManagementService
             ?? throw new ApplicationNotFoundException("Exam schedule was not found.");
 
         schedule.Update(request.Name, request.DurationMinutes);
+
+        if (!string.IsNullOrWhiteSpace(request.AntiCaptureMode))
+        {
+            schedule.SetAntiCaptureMode(request.AntiCaptureMode);
+        }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -271,6 +281,7 @@ public sealed class ExamManagementService : IExamManagementService
             schedule.StartsAtUtc,
             schedule.EndsAtUtc,
             schedule.Status,
-            schedule.AccessPinCode ?? string.Empty);
+            schedule.AccessPinCode ?? string.Empty,
+            schedule.AntiCaptureMode);
     }
 }

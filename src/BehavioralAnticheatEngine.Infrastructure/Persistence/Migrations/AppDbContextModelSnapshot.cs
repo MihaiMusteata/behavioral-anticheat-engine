@@ -283,6 +283,11 @@ namespace BehavioralAnticheatEngine.Infrastructure.Persistence.Migrations
                         .HasMaxLength(6)
                         .HasColumnType("character varying(6)");
 
+                    b.Property<string>("AntiCaptureMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<Guid>("AssessmentId")
                         .HasColumnType("uuid");
 

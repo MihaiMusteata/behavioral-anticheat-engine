@@ -165,7 +165,8 @@ public sealed class ExamSessionService : IExamSessionService
             now,
             secret,
             ToStudentAssessment(schedule.Assessment),
-            existingAnswers.Select(answer => new ExistingAnswerDto(answer.QuestionId, answer.AnswerJson)).ToArray());
+            existingAnswers.Select(answer => new ExistingAnswerDto(answer.QuestionId, answer.AnswerJson)).ToArray(),
+            schedule.AntiCaptureMode);
     }
 
     public async Task<SaveAnswerResponse> SaveAnswerAsync(Guid sessionId, Guid studentId, SaveAnswerRequest request, CancellationToken cancellationToken = default)

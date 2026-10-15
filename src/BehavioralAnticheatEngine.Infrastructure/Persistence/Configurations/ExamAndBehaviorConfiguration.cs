@@ -72,6 +72,7 @@ public sealed class ExamScheduleConfiguration : IEntityTypeConfiguration<ExamSch
         builder.Property(schedule => schedule.DurationMinutes).IsRequired();
         builder.Property(schedule => schedule.AccessPinCode).HasMaxLength(6);
         builder.Property(schedule => schedule.Status).HasMaxLength(64).IsRequired();
+        builder.Property(schedule => schedule.AntiCaptureMode).HasMaxLength(32).IsRequired();
         builder.Property(schedule => schedule.CreatedByUserId).IsRequired();
         builder.Property(schedule => schedule.CreatedAtUtc).IsRequired();
         builder.HasOne(schedule => schedule.Assessment)

@@ -9,13 +9,16 @@ public sealed record ExamScheduleDto(
     DateTimeOffset? StartsAtUtc,
     DateTimeOffset? EndsAtUtc,
     string Status,
-    string AccessPinCode);
+    string AccessPinCode,
+    string AntiCaptureMode);
 
 public sealed record CreateExamScheduleRequest(
     Guid AssessmentId,
     string Name,
-    int DurationMinutes);
+    int DurationMinutes,
+    string? AntiCaptureMode = null);
 
 public sealed record UpdateExamScheduleRequest(
     string Name,
-    int DurationMinutes);
+    int DurationMinutes,
+    string? AntiCaptureMode = null);
