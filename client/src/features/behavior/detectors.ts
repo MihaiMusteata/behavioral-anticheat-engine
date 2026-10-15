@@ -523,7 +523,7 @@ function computeOffsetsWithinElement(container: Node, range: Range): { start: nu
   return start === null || end === null ? null : { start, end }
 }
 
-const heartbeatIntervalMs = 8000
+export const heartbeatIntervalMs = 8000
 
 // Fixed-interval sample of continuous state (idle time, window/devtools gap,
 // pointer position, scroll). Unlike the threshold-gated detectors above

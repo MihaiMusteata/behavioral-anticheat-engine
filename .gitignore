@@ -78,3 +78,4 @@ dev-history-commits.sh
 *.sln
 *.sw?
 october-history-commits.sh
+masking-overlay-history-commits.sh
