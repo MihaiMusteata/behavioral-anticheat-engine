@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from '@iconify/react'
 import { toast } from 'react-toastify'
 import { api, getErrorMessage } from '../../lib/api'
+import { Markdown } from '../../lib/markdown'
 import { useBehaviorCollector } from '../behavior/useBehaviorCollector'
 import { useAuth } from '../auth/auth-context'
 import { Shell } from '../../shared/Shell'
@@ -386,7 +387,9 @@ function ExamRunner({
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-emerald-700">{t.studentApp.questionProgress(currentIndex + 1, session.assessment.questions.length)}</p>
-            <h3 className="mt-1 text-xl font-semibold" data-bae-zone="question_prompt">{question.prompt}</h3>
+            <div className="mt-1 text-xl font-semibold" data-bae-zone="question_prompt">
+              <Markdown text={question.prompt} />
+            </div>
           </div>
           <span className="rounded bg-slate-100 px-2 py-1 text-sm text-slate-700">{question.points} {t.studentApp.pointsSuffix}</span>
         </div>
