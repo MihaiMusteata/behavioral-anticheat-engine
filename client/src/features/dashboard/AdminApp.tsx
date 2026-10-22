@@ -3,6 +3,7 @@ import { Icon } from '@iconify/react'
 import QRCode from 'qrcode'
 import { toast } from 'react-toastify'
 import { api, getAccessToken, getErrorMessage, resolveApiUrl } from '../../lib/api'
+import { Markdown } from '../../lib/markdown'
 import { Shell } from '../../shared/Shell'
 import { useLanguage } from '../../lib/i18n/language-context'
 import type { TranslationDictionary } from '../../lib/i18n/translations'
@@ -348,7 +349,7 @@ function QuestionEditor({ form, onChange, onSave }: { form: QuestionForm; onChan
 
   return (
     <div className="rounded-md bg-slate-50 p-3">
-      <div className="grid gap-3 md:grid-cols-[180px_1fr_120px_120px]">
+      <div className="grid gap-3 md:grid-cols-[180px_120px_120px]">
         <label className="text-sm font-medium text-slate-700">
           {t.admin.questionEditor.typeLabel}
           <select className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" value={form.type} onChange={(event) => onChange({ ...form, type: event.target.value as QuestionType })}>
@@ -358,10 +359,6 @@ function QuestionEditor({ form, onChange, onSave }: { form: QuestionForm; onChan
           </select>
         </label>
         <label className="text-sm font-medium text-slate-700">
-          {t.admin.questionEditor.promptLabel}
-          <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" value={form.prompt} onChange={(event) => onChange({ ...form, prompt: event.target.value })} />
-        </label>
-        <label className="text-sm font-medium text-slate-700">
           {t.admin.questionEditor.pointsLabel}
           <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" type="number" min={0.5} step={0.5} value={form.points} onChange={(event) => onChange({ ...form, points: Number(event.target.value) })} />
         </label>
@@ -369,6 +366,25 @@ function QuestionEditor({ form, onChange, onSave }: { form: QuestionForm; onChan
           {t.admin.questionEditor.orderLabel}
           <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" type="number" min={1} value={form.orderIndex} onChange={(event) => onChange({ ...form, orderIndex: Number(event.target.value) })} />
         </label>
+      </div>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <label className="text-sm font-medium text-slate-700">
+          {t.admin.questionEditor.promptLabel}
+          <textarea
+            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm"
+            rows={5}
+            value={form.prompt}
+            onChange={(event) => onChange({ ...form, prompt: event.target.value })}
+          />
+          <span className="mt-1 block text-xs font-normal text-slate-500">{t.admin.questionEditor.promptHint}</span>
+        </label>
+        <div className="text-sm font-medium text-slate-700">
+          {t.admin.questionEditor.promptPreviewLabel}
+          <div className="mt-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-900">
+            {form.prompt.trim().length > 0 ? <Markdown text={form.prompt} /> : <span className="text-slate-400">{t.admin.questionEditor.promptPreviewEmpty}</span>}
+          </div>
+        </div>
       </div>
 
       {form.type !== 'free_text' ? (
