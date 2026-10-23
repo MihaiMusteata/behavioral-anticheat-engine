@@ -1158,7 +1158,7 @@ function SessionDetail({ timeline, onScored }: { timeline: SessionTimeline; onSc
           {selectedQuestion ? (
             <div className="rounded-md bg-slate-50 p-3">
               <p className="text-xs font-semibold uppercase text-slate-500">{selectedQuestion.label}</p>
-              <p className="mt-1 text-sm text-slate-700">{selectedQuestion.prompt}</p>
+              <Markdown text={selectedQuestion.prompt} className="mt-1 text-sm text-slate-700" />
             </div>
           ) : null}
         </div>
