@@ -13,12 +13,14 @@ import {
   saveActiveQuestionIndex,
 } from './examSessionStorage'
 import { saveAnswerSecure, selfReportSecure, submitExamSecure } from './secureSessionActions'
+import { useLanguage } from '../../lib/i18n/language-context'
 import type { ExistingAnswer, Question, StartExamSessionResponse, SubmitExamResponse } from './types'
 
 type AnswerValue = string | string[]
 
 export function StudentApp() {
   const { restoredFromStorage, logout } = useAuth()
+  const { t } = useLanguage()
   const [session, setSession] = useState<StartExamSessionResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const resumeAttemptedRef = useRef(false)
@@ -31,7 +33,7 @@ export function StudentApp() {
 
     const examScheduleId = readActiveExamScheduleId()
     if (!examScheduleId) {
-      toast.error('No exam reference found for this account.')
+      toast.error(t.studentApp.noExamReferenceError)
       clearActiveExamScheduleId()
       clearActiveQuestionIndex()
       logout()
@@ -50,12 +52,12 @@ export function StudentApp() {
         logout()
       })
       .finally(() => setLoading(false))
-  }, [logout])
+  }, [logout, t])
 
   if (loading) {
     return (
       <Shell title="Exam">
-        <main className="mx-auto max-w-3xl px-4 py-10 text-center text-slate-600">Loading your exam session...</main>
+        <main className="mx-auto max-w-3xl px-4 py-10 text-center text-slate-600">{t.studentApp.loadingSession}</main>
       </Shell>
     )
   }
@@ -91,6 +93,7 @@ function ExamRunner({
   isRestored: boolean
   onFinished: () => void
 }) {
+  const { t } = useLanguage()
   const [currentIndex, setCurrentIndex] = useState(() => {
     const storedIndex = readActiveQuestionIndex(session.sessionId)
     return storedIndex !== null && storedIndex >= 0 && storedIndex < session.assessment.questions.length
@@ -182,7 +185,7 @@ function ExamRunner({
   const saveCurrentAnswer = useCallback(async () => {
     const answer = answers[question.id]
     if (!isAnswered(question, answer)) {
-      toast.warn('Answer the current question before continuing.')
+      toast.warn(t.studentApp.answerRequiredWarning)
       return false
     }
 
@@ -202,7 +205,7 @@ function ExamRunner({
     } finally {
       setSaving(false)
     }
-  }, [answers, behavior, question, session.behaviorSigningSecret, session.sessionId])
+  }, [answers, behavior, question, session.behaviorSigningSecret, session.sessionId, t])
 
   const persistCurrentAnswerIfPresent = useCallback(async () => {
     if (!isAnswered(question, answers[question.id])) {
@@ -318,7 +321,7 @@ function ExamRunner({
       submittedRef.current = true
       setSubmitted(true)
       behavior.clearSessionState()
-      toast.success('Exam submitted.')
+      toast.success(t.studentApp.examSubmittedToast)
       setShowSelfReportModal(true)
     } catch (error) {
       behavior.record('session_resume', { reason: 'submit_failed', questionId: null, questionIndex: null })
@@ -328,7 +331,7 @@ function ExamRunner({
       submitInProgressRef.current = false
       setSubmitting(false)
     }
-  }, [answers, behavior, endActiveQuestionView, question, saveCurrentAnswer, session.behaviorSigningSecret, session.sessionId])
+  }, [answers, behavior, endActiveQuestionView, question, saveCurrentAnswer, session.behaviorSigningSecret, session.sessionId, t])
 
   useEffect(() => {
     if (remainingMs === 0 && !submitted) {
@@ -382,10 +385,10 @@ function ExamRunner({
       <article className="rounded-lg border border-slate-300 bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-emerald-700">Question {currentIndex + 1} / {session.assessment.questions.length}</p>
+            <p className="text-sm font-medium text-emerald-700">{t.studentApp.questionProgress(currentIndex + 1, session.assessment.questions.length)}</p>
             <h3 className="mt-1 text-xl font-semibold" data-bae-zone="question_prompt">{question.prompt}</h3>
           </div>
-          <span className="rounded bg-slate-100 px-2 py-1 text-sm text-slate-700">{question.points} pts</span>
+          <span className="rounded bg-slate-100 px-2 py-1 text-sm text-slate-700">{question.points} {t.studentApp.pointsSuffix}</span>
         </div>
 
         <QuestionAnswer
@@ -398,7 +401,7 @@ function ExamRunner({
           {saving ? (
             <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500">
               <Icon icon="mdi:loading" className="h-4 w-4 animate-spin" />
-              Saving...
+              {t.studentApp.saving}
             </span>
           ) : null}
           {currentIndex < session.assessment.questions.length - 1 ? (
@@ -407,7 +410,7 @@ function ExamRunner({
               onClick={() => void goNext()}
               className="inline-flex items-center gap-2 rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
             >
-              Next
+              {t.studentApp.next}
               <Icon icon="mdi:arrow-right" className="h-4 w-4" />
             </button>
           ) : (
@@ -418,7 +421,7 @@ function ExamRunner({
               className="inline-flex items-center gap-2 rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
             >
               <Icon icon={submitting ? 'mdi:loading' : 'mdi:send'} className={`h-4 w-4 ${submitting ? 'animate-spin' : ''}`} />
-              {submitting ? 'Submitting...' : 'Submit'}
+              {submitting ? t.studentApp.submitting : t.studentApp.submit}
             </button>
           )}
         </div>
@@ -427,10 +430,9 @@ function ExamRunner({
       {showSelfReportModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4">
           <div className="w-full max-w-sm rounded-lg bg-white p-6 text-center shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900">Ai trișat la acest examen?</h3>
+            <h3 className="text-lg font-semibold text-slate-900">{t.studentApp.selfReportTitle}</h3>
             <p className="mt-2 text-sm text-slate-600">
-              Te rugăm să răspunzi sincer — răspunsul nu influențează nota. Această platformă este realizată exclusiv pentru colectarea
-              de date reale, necesare dezvoltării ulterioare a tezei de master.
+              {t.studentApp.selfReportBody}
             </p>
             <div className="mt-5 flex justify-center gap-3">
               <button
@@ -439,7 +441,7 @@ function ExamRunner({
                 disabled={selfReportSubmitting}
                 className="inline-flex items-center gap-2 rounded-md bg-rose-700 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-800 disabled:opacity-60"
               >
-                Da
+                {t.studentApp.selfReportYes}
               </button>
               <button
                 type="button"
@@ -447,7 +449,7 @@ function ExamRunner({
                 disabled={selfReportSubmitting}
                 className="inline-flex items-center gap-2 rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
               >
-                Nu
+                {t.studentApp.selfReportNo}
               </button>
             </div>
           </div>
@@ -458,14 +460,14 @@ function ExamRunner({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4">
           <div className="w-full max-w-sm rounded-lg bg-white p-6 text-center shadow-xl">
             <Icon icon="mdi:check-circle" className="mx-auto h-10 w-10 text-emerald-600" />
-            <h3 className="mt-2 text-lg font-semibold text-slate-900">Examen finalizat</h3>
+            <h3 className="mt-2 text-lg font-semibold text-slate-900">{t.studentApp.resultTitle}</h3>
             {finalScore !== null ? (
               <p className="mt-3 text-3xl font-bold tabular-nums text-slate-950">
-                {finalScore} <span className="text-lg font-medium text-slate-500">/ {totalPoints}</span>
+                {finalScore} <span className="text-lg font-medium text-slate-500">{t.studentApp.resultScoreOutOf(totalPoints)}</span>
               </p>
             ) : (
               <p className="mt-3 text-sm text-slate-600">
-                Răspunsurile tale au fost înregistrate. Nota finală va fi disponibilă după ce profesorul corectează manual întrebările deschise.
+                {t.studentApp.resultPendingManualGrading}
               </p>
             )}
             <button
@@ -473,7 +475,7 @@ function ExamRunner({
               onClick={onFinished}
               className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
             >
-              Închide
+              {t.studentApp.closeResult}
             </button>
           </div>
         </div>
@@ -604,6 +606,7 @@ function formatRemaining(ms: number) {
 }
 
 function CountdownClock({ remainingMs }: { remainingMs: number }) {
+  const { t } = useLanguage()
   const totalSeconds = Math.ceil(remainingMs / 1000)
   const isCritical = totalSeconds <= 60
   const isWarning = !isCritical && totalSeconds <= 300
@@ -616,7 +619,7 @@ function CountdownClock({ remainingMs }: { remainingMs: number }) {
 
   return (
     <div className={`mb-4 rounded-lg border-2 p-3 text-center ${toneClasses} ${isCritical ? 'animate-pulse' : ''}`}>
-      <p className="text-[10px] font-semibold uppercase tracking-widest opacity-70">Time left</p>
+      <p className="text-[10px] font-semibold uppercase tracking-widest opacity-70">{t.studentApp.timeLeft}</p>
       <p className="font-mono text-4xl font-bold tabular-nums tracking-widest">{formatRemaining(remainingMs)}</p>
     </div>
   )

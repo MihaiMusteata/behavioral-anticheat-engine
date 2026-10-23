@@ -28,7 +28,10 @@ public interface IExamRepository
 
     Task AddExamScheduleAsync(ExamSchedule examSchedule, CancellationToken cancellationToken = default);
 
-    Task<ExamSession?> GetActiveSessionAsync(Guid examScheduleId, Guid studentId, CancellationToken cancellationToken = default);
+    // Matches Active and Abandoned (not Submitted) - a student returning
+    // after the silence monitor gave up on them should resume, not be told
+    // no session exists.
+    Task<ExamSession?> GetResumableSessionAsync(Guid examScheduleId, Guid studentId, CancellationToken cancellationToken = default);
 
     Task<ExamSession?> GetSessionAsync(Guid sessionId, CancellationToken cancellationToken = default);
 

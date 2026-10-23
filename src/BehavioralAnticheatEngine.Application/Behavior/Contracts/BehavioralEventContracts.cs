@@ -47,6 +47,14 @@ public sealed record BehavioralIngestionOptions
 
     public int EventSilenceSeconds { get; init; } = 60;
 
+    // How long a session can stay silent before the monitor stops polling it
+    // and marks it Abandoned instead of continuing to emit repeated
+    // event_silence_detected entries - keeps the proctor's audit timeline
+    // readable instead of flooded with duplicate "still silent" pings for a
+    // session nobody is looking at anymore. Deliberately much longer than
+    // EventSilenceSeconds, so a brief reload/network hiccup never trips it.
+    public int SessionAbandonmentSeconds { get; init; } = 300;
+
     public int MaxBatchSize { get; init; } = 100;
 
     public int MaxEncryptedDataLength { get; init; } = 90_000;

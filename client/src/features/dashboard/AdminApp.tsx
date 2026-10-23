@@ -4,6 +4,8 @@ import QRCode from 'qrcode'
 import { toast } from 'react-toastify'
 import { api, getAccessToken, getErrorMessage, resolveApiUrl } from '../../lib/api'
 import { Shell } from '../../shared/Shell'
+import { useLanguage } from '../../lib/i18n/language-context'
+import type { TranslationDictionary } from '../../lib/i18n/translations'
 import type { Assessment, AssessmentSummary, ExamSchedule, Question, QuestionType } from '../exams/types'
 import type { DashboardLiveEvent, DashboardSessionRow, ExamDashboard, SessionTimeline, TimelineEvent } from './types'
 
@@ -34,6 +36,7 @@ export type DashboardPanelHandle = {
 }
 
 export function AdminApp() {
+  const { t } = useLanguage()
   const [tab, setTab] = useState<Tab>('tests')
   const [assessments, setAssessments] = useState<AssessmentSummary[]>([])
   const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null)
@@ -86,13 +89,13 @@ export function AdminApp() {
   }, [])
 
   return (
-    <Shell title="Proctor dashboard">
+    <Shell title={t.admin.shellTitle}>
       <main className="mx-auto max-w-7xl px-4 py-6">
         <nav className="mb-5 flex flex-wrap gap-2">
           {[
-            ['tests', 'Tests', 'mdi:file-document-edit'],
-            ['exams', 'Exam schedules', 'mdi:calendar-clock'],
-            ['dashboard', 'Live dashboard', 'mdi:view-dashboard'],
+            ['tests', t.admin.tabs.tests, 'mdi:file-document-edit'],
+            ['exams', t.admin.tabs.exams, 'mdi:calendar-clock'],
+            ['dashboard', t.admin.tabs.dashboard, 'mdi:view-dashboard'],
           ].map(([id, label, icon]) => (
             <button
               key={id}
@@ -152,6 +155,7 @@ function TestsPanel({
   onLoadAssessment: (assessmentId: string) => void
   onSelectedAssessmentChange: (assessment: Assessment | null) => void
 }) {
+  const { t } = useLanguage()
   const [title, setTitle] = useState(selectedAssessment?.title ?? '')
   const [description, setDescription] = useState(selectedAssessment?.description ?? '')
   const [publish, setPublish] = useState(selectedAssessment?.isPublished ?? true)
@@ -167,7 +171,7 @@ function TestsPanel({
         const response = await api.post<Assessment>('/api/assessments', payload)
         onSelectedAssessmentChange(response.data)
       }
-      toast.success('Test saved.')
+      toast.success(t.admin.toast.testSaved)
       onReload()
     } catch (error) {
       toast.error(getErrorMessage(error))
@@ -180,7 +184,7 @@ function TestsPanel({
       if (selectedAssessment?.id === assessmentId) {
         onSelectedAssessmentChange(null)
       }
-      toast.success('Test deleted.')
+      toast.success(t.admin.toast.testDeleted)
       onReload()
     } catch (error) {
       toast.error(getErrorMessage(error))
@@ -189,7 +193,7 @@ function TestsPanel({
 
   async function saveQuestion() {
     if (!selectedAssessment) {
-      toast.warn('Select a test first.')
+      toast.warn(t.admin.toast.selectTestFirst)
       return
     }
 
@@ -207,7 +211,7 @@ function TestsPanel({
       } else {
         await api.post(`/api/assessments/${selectedAssessment.id}/questions`, payload)
       }
-      toast.success('Question saved.')
+      toast.success(t.admin.toast.questionSaved)
       setQuestionForm(emptyQuestionForm)
       onLoadAssessment(selectedAssessment.id)
       onReload()
@@ -223,7 +227,7 @@ function TestsPanel({
 
     try {
       await api.delete(`/api/questions/${questionId}`)
-      toast.success('Question deleted.')
+      toast.success(t.admin.toast.questionDeleted)
       onLoadAssessment(selectedAssessment.id)
       onReload()
     } catch (error) {
@@ -235,7 +239,7 @@ function TestsPanel({
     <section className="grid gap-4 lg:grid-cols-[320px_1fr]">
       <aside className="rounded-lg border border-slate-300 bg-white p-4">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-semibold">Tests</h2>
+          <h2 className="font-semibold">{t.admin.tests.heading}</h2>
           <button
             type="button"
             onClick={() => {
@@ -247,7 +251,7 @@ function TestsPanel({
             }}
             className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-50"
           >
-            New
+            {t.admin.tests.newButton}
           </button>
         </div>
         <div className="space-y-2">
@@ -256,14 +260,14 @@ function TestsPanel({
               <button type="button" onClick={() => onLoadAssessment(assessment.id)} className="block text-left font-medium text-slate-950">
                 {assessment.title}
               </button>
-              <p className="text-xs text-slate-500">{assessment.questionCount} questions</p>
+              <p className="text-xs text-slate-500">{t.admin.tests.questionCount(assessment.questionCount)}</p>
               <button
                 type="button"
                 onClick={() => void deleteAssessment(assessment.id)}
                 className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-rose-700"
               >
                 <Icon icon="mdi:trash-can-outline" className="h-4 w-4" />
-                Delete
+                {t.common.delete}
               </button>
             </div>
           ))}
@@ -272,33 +276,33 @@ function TestsPanel({
 
       <div className="grid gap-4">
         <section className="rounded-lg border border-slate-300 bg-white p-4">
-          <h2 className="mb-4 font-semibold">{selectedAssessment ? 'Edit test' : 'Create test'}</h2>
+          <h2 className="mb-4 font-semibold">{selectedAssessment ? t.admin.tests.editHeading : t.admin.tests.createHeading}</h2>
           <div className="grid gap-3 md:grid-cols-2">
             <label className="md:col-span-2 text-sm font-medium text-slate-700">
-              Title
+              {t.admin.tests.titleLabel}
               <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" value={title} onChange={(event) => setTitle(event.target.value)} />
             </label>
             <label className="md:col-span-2 text-sm font-medium text-slate-700">
-              Description
+              {t.admin.tests.descriptionLabel}
               <textarea className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" value={description} onChange={(event) => setDescription(event.target.value)} />
             </label>
             <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
               <input type="checkbox" checked={publish} onChange={(event) => setPublish(event.target.checked)} />
-              Published
+              {t.admin.tests.publishedLabel}
             </label>
           </div>
           <button type="button" onClick={() => void saveAssessment()} className="mt-4 inline-flex items-center gap-2 rounded-md bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">
             <Icon icon="mdi:content-save" className="h-4 w-4" />
-            Save test
+            {t.admin.tests.saveButton}
           </button>
         </section>
 
         {selectedAssessment ? (
           <section className="rounded-lg border border-slate-300 bg-white p-4">
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="font-semibold">Questions</h2>
+              <h2 className="font-semibold">{t.admin.tests.questionsHeading}</h2>
               <button type="button" onClick={() => setQuestionForm(emptyQuestionForm)} className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium">
-                New question
+                {t.admin.tests.newQuestionButton}
               </button>
             </div>
 
@@ -322,7 +326,7 @@ function TestsPanel({
                     className="text-left"
                   >
                     <p className="font-medium">{question.prompt}</p>
-                    <p className="text-xs text-slate-500">{question.type} · {question.points} pts</p>
+                    <p className="text-xs text-slate-500">{t.admin.tests.questionMeta(question.type, question.points)}</p>
                   </button>
                   <button type="button" onClick={() => void deleteQuestion(question.id)} className="text-rose-700">
                     <Icon icon="mdi:trash-can-outline" className="h-5 w-5" />
@@ -340,27 +344,29 @@ function TestsPanel({
 }
 
 function QuestionEditor({ form, onChange, onSave }: { form: QuestionForm; onChange: (form: QuestionForm) => void; onSave: () => void }) {
+  const { t } = useLanguage()
+
   return (
     <div className="rounded-md bg-slate-50 p-3">
       <div className="grid gap-3 md:grid-cols-[180px_1fr_120px_120px]">
         <label className="text-sm font-medium text-slate-700">
-          Type
+          {t.admin.questionEditor.typeLabel}
           <select className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" value={form.type} onChange={(event) => onChange({ ...form, type: event.target.value as QuestionType })}>
-            <option value="single_choice">Single choice</option>
-            <option value="multiple_choice">Multiple choice</option>
-            <option value="free_text">Free text</option>
+            <option value="single_choice">{t.admin.questionEditor.singleChoice}</option>
+            <option value="multiple_choice">{t.admin.questionEditor.multipleChoice}</option>
+            <option value="free_text">{t.admin.questionEditor.freeText}</option>
           </select>
         </label>
         <label className="text-sm font-medium text-slate-700">
-          Prompt
+          {t.admin.questionEditor.promptLabel}
           <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" value={form.prompt} onChange={(event) => onChange({ ...form, prompt: event.target.value })} />
         </label>
         <label className="text-sm font-medium text-slate-700">
-          Points
+          {t.admin.questionEditor.pointsLabel}
           <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" type="number" min={0.5} step={0.5} value={form.points} onChange={(event) => onChange({ ...form, points: Number(event.target.value) })} />
         </label>
         <label className="text-sm font-medium text-slate-700">
-          Order
+          {t.admin.questionEditor.orderLabel}
           <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" type="number" min={1} value={form.orderIndex} onChange={(event) => onChange({ ...form, orderIndex: Number(event.target.value) })} />
         </label>
       </div>
@@ -386,7 +392,7 @@ function QuestionEditor({ form, onChange, onSave }: { form: QuestionForm; onChan
                     options: form.options.map((current, optionIndex) => optionIndex === index ? { ...current, isCorrect: event.target.checked } : current),
                   })}
                 />
-                Correct
+                {t.admin.questionEditor.correctLabel}
               </label>
               <button
                 type="button"
@@ -403,14 +409,14 @@ function QuestionEditor({ form, onChange, onSave }: { form: QuestionForm; onChan
             className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium"
           >
             <Icon icon="mdi:plus" className="h-4 w-4" />
-            Add option
+            {t.admin.questionEditor.addOptionButton}
           </button>
         </div>
       ) : null}
 
       <button type="button" onClick={onSave} className="mt-4 inline-flex items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-sm font-semibold text-white">
         <Icon icon="mdi:content-save" className="h-4 w-4" />
-        Save question
+        {t.admin.questionEditor.saveButton}
       </button>
     </div>
   )
@@ -427,6 +433,7 @@ function ExamSchedulesPanel({
   onReload: () => void
   onExamStarted: (examId: string) => void
 }) {
+  const { t } = useLanguage()
   const [editingExamId, setEditingExamId] = useState<string | null>(null)
   const [assessmentId, setAssessmentId] = useState('')
   const [name, setName] = useState('')
@@ -455,7 +462,7 @@ function ExamSchedulesPanel({
       } else {
         await api.post('/api/exams', { assessmentId: activeAssessmentId, name, durationMinutes })
       }
-      toast.success('Exam schedule saved.')
+      toast.success(t.admin.toast.scheduleSaved)
       resetForm()
       onReload()
     } catch (error) {
@@ -475,7 +482,7 @@ function ExamSchedulesPanel({
       }
 
       await api.post(`/api/exams/${examId}/start`)
-      toast.success('Exam started — opening live dashboard.')
+      toast.success(t.admin.toast.examStarted)
       resetForm()
       onReload()
       onExamStarted(examId)
@@ -495,7 +502,7 @@ function ExamSchedulesPanel({
       }
       onReload()
       if (action === 'start') {
-        toast.success('Exam started — opening live dashboard.')
+        toast.success(t.admin.toast.examStarted)
         onExamStarted(examId)
       }
     } catch (error) {
@@ -506,10 +513,10 @@ function ExamSchedulesPanel({
   return (
     <section className="grid gap-4 lg:grid-cols-[380px_1fr]">
       <form className="rounded-lg border border-slate-300 bg-white p-4" onSubmit={(event) => { event.preventDefault(); void saveExam() }}>
-        <h2 className="mb-4 font-semibold">{editingExamId ? 'Edit schedule' : 'Create schedule'}</h2>
+        <h2 className="mb-4 font-semibold">{editingExamId ? t.admin.schedules.editHeading : t.admin.schedules.createHeading}</h2>
         <div className="space-y-3">
           <label className="block text-sm font-medium text-slate-700">
-            Test
+            {t.admin.schedules.testLabel}
             <select className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" value={activeAssessmentId} onChange={(event) => setAssessmentId(event.target.value)} disabled={Boolean(editingExamId)}>
               {assessments.map((assessment) => (
                 <option key={assessment.id} value={assessment.id}>{assessment.title}</option>
@@ -517,11 +524,11 @@ function ExamSchedulesPanel({
             </select>
           </label>
           <label className="block text-sm font-medium text-slate-700">
-            Name
+            {t.admin.schedules.nameLabel}
             <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" value={name} onChange={(event) => setName(event.target.value)} />
           </label>
           <label className="block text-sm font-medium text-slate-700">
-            Duration (minutes)
+            {t.admin.schedules.durationLabel}
             <input
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
               type="number"
@@ -531,14 +538,13 @@ function ExamSchedulesPanel({
             />
           </label>
           <p className="text-xs text-slate-500">
-            Participation is open to anyone with the access code — no student roster needed. Starts/ends are set automatically from this
-            duration the moment you start the exam, and the PIN can be shared from the live dashboard.
+            {t.admin.schedules.participationNote}
           </p>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <button type="submit" className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
             <Icon icon="mdi:content-save" className="h-4 w-4" />
-            Save schedule
+            {t.admin.schedules.saveButton}
           </button>
           <button
             type="button"
@@ -547,13 +553,13 @@ function ExamSchedulesPanel({
             className="inline-flex items-center gap-2 rounded-md bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
           >
             <Icon icon={starting ? 'mdi:loading' : 'mdi:play'} className={`h-4 w-4 ${starting ? 'animate-spin' : ''}`} />
-            Start now
+            {t.admin.schedules.startNowButton}
           </button>
         </div>
       </form>
 
       <section className="rounded-lg border border-slate-300 bg-white p-4">
-        <h2 className="mb-4 font-semibold">Schedules</h2>
+        <h2 className="mb-4 font-semibold">{t.admin.schedules.heading}</h2>
         <div className="space-y-2">
           {exams.map((exam) => (
             <div key={exam.id} className="rounded-md border border-slate-200 p-3">
@@ -562,16 +568,16 @@ function ExamSchedulesPanel({
                   <p className="font-medium">{exam.name}</p>
                   <p className="text-sm text-slate-600">
                     {exam.assessmentTitle} · {exam.durationMinutes} min
-                    {exam.startsAtUtc && exam.endsAtUtc ? ` · ${formatDate(exam.startsAtUtc)} - ${formatDate(exam.endsAtUtc)}` : ' · not started yet'}
+                    {exam.startsAtUtc && exam.endsAtUtc ? ` · ${formatDate(exam.startsAtUtc)} - ${formatDate(exam.endsAtUtc)}` : ` · ${t.admin.schedules.notStartedYet}`}
                   </p>
                 </div>
                 <span className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">{exam.status}</span>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => editExam(exam)} className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium">Edit</button>
-                <button type="button" onClick={() => void mutateExam(exam.id, 'start')} className="rounded-md border border-emerald-300 px-2 py-1 text-xs font-medium text-emerald-800">Start now</button>
-                <button type="button" onClick={() => void mutateExam(exam.id, 'stop')} className="rounded-md border border-amber-300 px-2 py-1 text-xs font-medium text-amber-800">Stop</button>
-                <button type="button" onClick={() => void mutateExam(exam.id, 'delete')} className="rounded-md border border-rose-300 px-2 py-1 text-xs font-medium text-rose-800">Delete</button>
+                <button type="button" onClick={() => editExam(exam)} className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium">{t.common.edit}</button>
+                <button type="button" onClick={() => void mutateExam(exam.id, 'start')} className="rounded-md border border-emerald-300 px-2 py-1 text-xs font-medium text-emerald-800">{t.admin.schedules.startNowButton}</button>
+                <button type="button" onClick={() => void mutateExam(exam.id, 'stop')} className="rounded-md border border-amber-300 px-2 py-1 text-xs font-medium text-amber-800">{t.admin.schedules.stopButton}</button>
+                <button type="button" onClick={() => void mutateExam(exam.id, 'delete')} className="rounded-md border border-rose-300 px-2 py-1 text-xs font-medium text-rose-800">{t.common.delete}</button>
               </div>
             </div>
           ))}
@@ -582,6 +588,7 @@ function ExamSchedulesPanel({
 }
 
 function ShareExam({ pinCode }: { pinCode: string }) {
+  const { t } = useLanguage()
   const joinUrl = useMemo(() => {
     if (!pinCode) {
       return ''
@@ -618,9 +625,9 @@ function ShareExam({ pinCode }: { pinCode: string }) {
   async function copyLink() {
     try {
       await navigator.clipboard.writeText(joinUrl)
-      toast.success('Join link copied.')
+      toast.success(t.admin.toast.joinLinkCopied)
     } catch {
-      toast.error('Could not copy the link.')
+      toast.error(t.admin.toast.couldNotCopyLink)
     }
   }
 
@@ -628,16 +635,16 @@ function ShareExam({ pinCode }: { pinCode: string }) {
     return (
       <div className="flex items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
         <Icon icon="mdi:qrcode" className="h-6 w-6 shrink-0 text-slate-400" />
-        Start this exam to generate an access code, join link and QR code.
+        {t.admin.share.startToGenerate}
       </div>
     )
   }
 
   return (
     <div className="flex flex-wrap items-center gap-4 rounded-lg border border-dashed border-emerald-300 bg-emerald-50 p-4">
-      {qrDataUrl ? <img src={qrDataUrl} alt={`QR code to join with PIN ${pinCode}`} className="h-24 w-24 rounded bg-white p-1" /> : null}
+      {qrDataUrl ? <img src={qrDataUrl} alt={t.admin.share.qrAlt(pinCode)} className="h-24 w-24 rounded bg-white p-1" /> : null}
       <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Access PIN</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">{t.admin.share.accessPinLabel}</p>
         <p className="text-2xl font-bold tracking-widest text-emerald-900">{pinCode}</p>
         <button
           type="button"
@@ -645,7 +652,7 @@ function ShareExam({ pinCode }: { pinCode: string }) {
           className="inline-flex items-center gap-1 rounded-md border border-emerald-700 px-2 py-1 text-xs font-semibold text-emerald-800 hover:bg-white"
         >
           <Icon icon="mdi:content-copy" className="h-4 w-4" />
-          Copy join link
+          {t.admin.share.copyJoinLinkButton}
         </button>
       </div>
     </div>
@@ -653,6 +660,7 @@ function ShareExam({ pinCode }: { pinCode: string }) {
 }
 
 const DashboardPanel = forwardRef<DashboardPanelHandle, { exams: ExamSchedule[]; active: boolean }>(function DashboardPanel({ exams, active }, ref) {
+  const { t } = useLanguage()
   const [examId, setExamId] = useState('')
   const [dashboard, setDashboard] = useState<ExamDashboard | null>(null)
   const [dashboardRefreshVersion, setDashboardRefreshVersion] = useState(0)
@@ -896,7 +904,7 @@ const DashboardPanel = forwardRef<DashboardPanelHandle, { exams: ExamSchedule[];
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-300 bg-white p-4">
         <label className="text-sm font-medium text-slate-700">
-          Exam
+          {t.admin.dashboard.examLabel}
           <select className="ml-2 rounded-md border border-slate-300 px-3 py-2" value={activeExamId} onChange={(event) => changeExam(event.target.value)}>
             {exams.map((exam) => (
               <option key={exam.id} value={exam.id}>{exam.name}</option>
@@ -905,7 +913,7 @@ const DashboardPanel = forwardRef<DashboardPanelHandle, { exams: ExamSchedule[];
         </label>
         <button type="button" onClick={refreshDashboardNow} className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold">
           <Icon icon="mdi:refresh" className="h-4 w-4" />
-          Refresh
+          {t.admin.dashboard.refreshButton}
         </button>
       </div>
 
@@ -914,9 +922,9 @@ const DashboardPanel = forwardRef<DashboardPanelHandle, { exams: ExamSchedule[];
       {dashboard ? (
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-3">
-            <Metric label="Low risk" value={dashboard.riskDistribution.low} tone="emerald" />
-            <Metric label="Medium risk" value={dashboard.riskDistribution.medium} tone="amber" />
-            <Metric label="High risk" value={dashboard.riskDistribution.high} tone="rose" />
+            <Metric label={t.admin.dashboard.lowRisk} value={dashboard.riskDistribution.low} tone="emerald" />
+            <Metric label={t.admin.dashboard.mediumRisk} value={dashboard.riskDistribution.medium} tone="amber" />
+            <Metric label={t.admin.dashboard.highRisk} value={dashboard.riskDistribution.high} tone="rose" />
           </div>
 
           <section className="rounded-lg border border-slate-300 bg-white">
@@ -927,11 +935,11 @@ const DashboardPanel = forwardRef<DashboardPanelHandle, { exams: ExamSchedule[];
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                   <tr>
-                    <th className="px-4 py-3">Student</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Suspicion</th>
-                    <th className="px-4 py-3">Events</th>
-                    <th className="px-4 py-3">Last activity</th>
+                    <th className="px-4 py-3">{t.admin.dashboard.studentColumn}</th>
+                    <th className="px-4 py-3">{t.admin.dashboard.statusColumn}</th>
+                    <th className="px-4 py-3">{t.admin.dashboard.suspicionColumn}</th>
+                    <th className="px-4 py-3">{t.admin.dashboard.eventsColumn}</th>
+                    <th className="px-4 py-3">{t.admin.dashboard.lastActivityColumn}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -955,7 +963,7 @@ const DashboardPanel = forwardRef<DashboardPanelHandle, { exams: ExamSchedule[];
             </div>
           </section>
 
-          <CollapsibleSection title="Event frequency">
+          <CollapsibleSection title={t.admin.dashboard.eventFrequencyTitle}>
             <div className="space-y-2">
               {dashboard.eventFrequencies.map((event) => (
                 <div key={event.eventType} className="flex items-center gap-3">
@@ -969,10 +977,10 @@ const DashboardPanel = forwardRef<DashboardPanelHandle, { exams: ExamSchedule[];
             </div>
           </CollapsibleSection>
 
-          <CollapsibleSection title={`Exam items (${examQuestions.length})`}>
+          <CollapsibleSection title={t.admin.dashboard.examItemsTitle(examQuestions.length)}>
             <div className="space-y-2">
               {examQuestions.length === 0 ? (
-                <p className="text-sm text-slate-500">No questions in this test.</p>
+                <p className="text-sm text-slate-500">{t.admin.dashboard.noQuestions}</p>
               ) : (
                 examQuestions
                   .slice()
@@ -1014,17 +1022,18 @@ const DashboardPanel = forwardRef<DashboardPanelHandle, { exams: ExamSchedule[];
               }}
             />
           ) : (
-            <div className="rounded-lg border border-slate-300 bg-white p-6 text-slate-600">Select a student to inspect the timeline.</div>
+            <div className="rounded-lg border border-slate-300 bg-white p-6 text-slate-600">{t.admin.dashboard.selectStudentPrompt}</div>
           )}
         </div>
       ) : (
-        <div className="rounded-lg border border-slate-300 bg-white p-6 text-slate-600">Select an exam to inspect live activity.</div>
+        <div className="rounded-lg border border-slate-300 bg-white p-6 text-slate-600">{t.admin.dashboard.selectExamPrompt}</div>
       )}
     </section>
   )
 })
 
 function SessionDetail({ timeline, onScored }: { timeline: SessionTimeline; onScored: () => void }) {
+  const { t } = useLanguage()
   const [manualScores, setManualScores] = useState<Record<string, string>>({})
   const [auditScope, setAuditScope] = useState('all')
   const [selectedEventTypes, setSelectedEventTypes] = useState<string[]>([])
@@ -1047,13 +1056,13 @@ function SessionDetail({ timeline, onScored }: { timeline: SessionTimeline; onSc
   async function scoreAnswer(questionId: string) {
     const score = Number(manualScores[questionId] ?? '')
     if (Number.isNaN(score)) {
-      toast.warn('Enter a numeric score.')
+      toast.warn(t.admin.toast.enterNumericScore)
       return
     }
 
     try {
       await api.put(`/api/dashboard/sessions/${activeTimeline.sessionId}/answers/${questionId}/score`, { score, feedback: null })
-      toast.success('Manual score saved.')
+      toast.success(t.admin.toast.manualScoreSaved)
       onScored()
     } catch (error) {
       toast.error(getErrorMessage(error))
@@ -1086,7 +1095,7 @@ function SessionDetail({ timeline, onScored }: { timeline: SessionTimeline; onSc
       </section>
 
       <section className="rounded-lg border border-slate-300 bg-white p-4">
-        <h3 className="mb-3 font-semibold">Manual scoring</h3>
+        <h3 className="mb-3 font-semibold">{t.admin.sessionDetail.manualScoringHeading}</h3>
         <div className="space-y-3">
           {visibleAnswers.map((answer) => (
             <div key={answer.questionId} className="rounded-md border border-slate-200 p-3">
@@ -1100,11 +1109,11 @@ function SessionDetail({ timeline, onScored }: { timeline: SessionTimeline; onSc
                     onChange={(event) => setManualScores((current) => ({ ...current, [answer.questionId]: event.target.value }))}
                   />
                   <button type="button" onClick={() => void scoreAnswer(answer.questionId)} className="rounded-md bg-slate-950 px-3 py-1 text-sm font-semibold text-white">
-                    Save
+                    {t.admin.sessionDetail.saveButton}
                   </button>
                 </div>
               ) : (
-                <p className="mt-2 text-sm text-slate-600">Auto score: {answer.autoScore ?? 0}</p>
+                <p className="mt-2 text-sm text-slate-600">{t.admin.sessionDetail.autoScore(answer.autoScore ?? 0)}</p>
               )}
             </div>
           ))}
@@ -1114,7 +1123,7 @@ function SessionDetail({ timeline, onScored }: { timeline: SessionTimeline; onSc
       <section className="rounded-lg border border-slate-300 bg-white p-4">
         <div className="mb-3 space-y-3">
           <label className="block text-sm font-medium text-slate-700">
-            Audit scope
+            {t.admin.sessionDetail.auditScopeLabel}
             <select
               className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm"
               value={auditScope}
@@ -1123,7 +1132,7 @@ function SessionDetail({ timeline, onScored }: { timeline: SessionTimeline; onSc
                 setSelectedEventTypes([])
               }}
             >
-              <option value="all">Tot auditul sesiunii</option>
+              <option value="all">{t.admin.sessionDetail.allSessionAudit}</option>
               {activeTimeline.questions.map((question) => (
                 <option key={question.questionId} value={question.questionId}>{question.label}</option>
               ))}
@@ -1140,8 +1149,8 @@ function SessionDetail({ timeline, onScored }: { timeline: SessionTimeline; onSc
 
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className="font-semibold">Activity timeline</h3>
-            <p className="text-xs text-slate-500">{visibleEvents.length} / {scopedEvents.length} events</p>
+            <h3 className="font-semibold">{t.admin.sessionDetail.activityTimelineHeading}</h3>
+            <p className="text-xs text-slate-500">{t.admin.sessionDetail.eventsCountLabel(visibleEvents.length, scopedEvents.length)}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -1150,7 +1159,7 @@ function SessionDetail({ timeline, onScored }: { timeline: SessionTimeline; onSc
               className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-2 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
               <Icon icon="mdi:download" className="h-4 w-4" />
-              Export CSV
+              {t.admin.sessionDetail.exportCsvButton}
             </button>
           </div>
         </div>
@@ -1165,7 +1174,7 @@ function SessionDetail({ timeline, onScored }: { timeline: SessionTimeline; onSc
                   ? [...current, eventType]
                   : current.filter((candidate) => candidate !== eventType))}
               />
-              {getEventLabel(eventType)}
+              {getEventLabel(eventType, t)}
             </label>
           ))}
         </div>
@@ -1174,11 +1183,11 @@ function SessionDetail({ timeline, onScored }: { timeline: SessionTimeline; onSc
           {visibleEvents.map((event) => (
             <div key={event.id} className="rounded-md border border-slate-200 p-3">
               <div className="flex items-center justify-between gap-3">
-                <p className="font-medium">{getEventLabel(event.eventType)}</p>
+                <p className="font-medium">{getEventLabel(event.eventType, t)}</p>
                 <span className="text-xs text-slate-500">#{event.seq}</span>
               </div>
               <p className="text-xs text-slate-500">{formatDate(getEventChronologyTimestamp(event))} {event.validationFlags ? `· ${event.validationFlags}` : ''}</p>
-              <p className="mt-1 text-sm text-slate-700">{getEventDetail(event)}</p>
+              <p className="mt-1 text-sm text-slate-700">{getEventDetail(event, t)}</p>
               {event.eventType === 'text_selected' ? (
                 <TextSelectionHighlight event={event} timeline={activeTimeline} />
               ) : null}
@@ -1203,13 +1212,14 @@ function CollapsibleSection({ title, children, defaultOpen = false }: { title: s
 }
 
 function RiskBar({ score }: { score: number }) {
+  const { t } = useLanguage()
   const normalized = Number.isFinite(score) ? Math.max(0, Math.min(Math.round(score), 100)) : 0
   const tone = normalized >= 70 ? 'bg-rose-600' : normalized >= 35 ? 'bg-amber-500' : 'bg-emerald-600'
 
   return (
     <div className="min-w-40">
       <div className="mb-1 flex items-center justify-between gap-2 text-xs font-semibold text-slate-700">
-        <span>Suspicion</span>
+        <span>{t.admin.riskBar.suspicion}</span>
         <span>{normalized}%</span>
       </div>
       <div className="h-2 rounded bg-slate-200">
@@ -1220,14 +1230,15 @@ function RiskBar({ score }: { score: number }) {
 }
 
 function SelfReportBadge({ value }: { value: boolean | null }) {
+  const { t } = useLanguage()
   if (value === null) {
-    return <p className="mt-2 text-xs text-slate-400">Studentul nu a răspuns la întrebarea de auto-raportare.</p>
+    return <p className="mt-2 text-xs text-slate-400">{t.admin.selfReport.noAnswer}</p>
   }
 
   return (
     <p className={`mt-2 inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold ${value ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`}>
       <Icon icon={value ? 'mdi:alert-circle' : 'mdi:check-circle'} className="h-4 w-4" />
-      Auto-raportare: {value ? 'a recunoscut frauda' : 'nu a trișat'}
+      {t.admin.selfReport.label} {value ? t.admin.selfReport.admitted : t.admin.selfReport.denied}
     </p>
   )
 }
@@ -1400,42 +1411,6 @@ function readFiniteNumber(record: JsonRecord, key: string) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-const eventLabels: Record<string, string> = {
-  window_blur: 'Window blur',
-  window_focus: 'Window focus',
-  visibility_change: 'Visibility change',
-  fullscreen_exit: 'Fullscreen exit',
-  fullscreen_enter: 'Fullscreen enter',
-  window_resize: 'Window resize',
-  copy: 'Copy',
-  cut: 'Cut',
-  paste: 'Paste',
-  clipboard_copy: 'Copy',
-  clipboard_cut: 'Cut',
-  clipboard_paste: 'Paste',
-  text_burst_detected: 'Text burst detected',
-  right_click: 'Right click',
-  keyboard_shortcut: 'Keyboard shortcut',
-  typing_speed_sample: 'Typing speed',
-  devtools_heuristic_triggered: 'Devtools heuristic',
-  print_attempt: 'Print attempt',
-  question_view_start: 'Question view start',
-  question_view_end: 'Question view end',
-  question_navigation: 'Question navigation',
-  answer_change: 'Answer change',
-  answer_saved: 'Answer saved',
-  idle_detected: 'Idle detected',
-  session_start: 'Session start',
-  session_end: 'Session end',
-  session_resume: 'Session resume',
-  multiple_tabs_detected: 'Multiple tabs detected',
-  page_reload: 'Page reload',
-  page_unload: 'Page unload',
-  event_sequence_gap: 'Sequence gap',
-  event_validation_failed: 'Validation failed',
-  event_silence_detected: 'Event silence detected',
-}
-
 // Reconstructs the yellow highlight for a text_selected event, combining its
 // stored zone + character offsets with content already known to the
 // dashboard (the question prompt or an option label) - the event itself
@@ -1471,19 +1446,19 @@ function TextSelectionHighlight({ event, timeline }: { event: TimelineEvent; tim
   )
 }
 
-function getEventLabel(eventType: string) {
-  return eventLabels[eventType] ?? eventType.replaceAll('_', ' ')
+function getEventLabel(eventType: string, t: TranslationDictionary) {
+  return (t.admin.eventLabels as Record<string, string>)[eventType] ?? eventType.replaceAll('_', ' ')
 }
 
-function getEventDetail(event: TimelineEvent) {
+function getEventDetail(event: TimelineEvent, t: TranslationDictionary) {
   const payload = flattenEventPayload(parsePayload(event.payloadJson))
   const parts: string[] = []
   const consumed = new Set(['eventType', 'questionId', 'details', 'data', 'payload'])
 
-  const appendString = (key: string, label?: string) => {
+  const appendString = (key: string, render?: (value: string) => string) => {
     const value = readString(payload, key)
     if (value) {
-      parts.push(label ? `${label} ${value}` : value)
+      parts.push(render ? render(value) : value)
       consumed.add(key)
     }
   }
@@ -1495,39 +1470,39 @@ function getEventDetail(event: TimelineEvent) {
     }
   }
 
-  appendNumber('questionIndex', (value) => `question ${value + 1}`)
-  appendNumber('orderIndex', (value) => `order ${value}`)
-  appendString('questionType', 'type')
+  appendNumber('questionIndex', (value) => t.admin.eventDetail.questionLabel(value + 1))
+  appendNumber('orderIndex', (value) => t.admin.eventDetail.orderLabel(value))
+  appendString('questionType', t.admin.eventDetail.typeLabel)
   appendString('visibilityState')
 
   if (typeof payload.hidden === 'boolean') {
-    parts.push(payload.hidden ? 'hidden' : 'visible')
+    parts.push(payload.hidden ? t.admin.eventDetail.hidden : t.admin.eventDetail.visible)
     consumed.add('hidden')
   }
 
-  appendString('activeElement', 'element')
-  appendNumber('blurDurationMs', (value) => `blur ${formatDuration(value)}`)
-  appendNumber('durationMs', (value) => `duration ${formatDuration(value)}`)
-  appendNumber('idleMs', (value) => `idle ${formatDuration(value)}`)
-  appendNumber('silentForMs', (value) => `silent ${formatDuration(value)}`)
-  appendNumber('elapsedMs', (value) => `change in ${formatDuration(value)}`)
-  appendNumber('sampleMs', (value) => `sample ${formatDuration(value)}`)
-  appendNumber('textLength', (value) => `${value} chars`)
-  appendNumber('charDelta', (value) => `${value >= 0 ? '+' : ''}${value} chars`)
-  appendNumber('answerLength', (value) => `answer ${value} chars`)
-  appendNumber('changeCount', (value) => `${value} changes`)
-  appendNumber('selectedCount', (value) => `${value} selected`)
-  appendNumber('charsPerSecond', (value) => `${value.toFixed(1)} chars/sec`)
+  appendString('activeElement', t.admin.eventDetail.elementLabel)
+  appendNumber('blurDurationMs', (value) => t.admin.eventDetail.blurLabel(formatDuration(value)))
+  appendNumber('durationMs', (value) => t.admin.eventDetail.durationLabel(formatDuration(value)))
+  appendNumber('idleMs', (value) => t.admin.eventDetail.idleLabel(formatDuration(value)))
+  appendNumber('silentForMs', (value) => t.admin.eventDetail.silentLabel(formatDuration(value)))
+  appendNumber('elapsedMs', (value) => t.admin.eventDetail.changeInLabel(formatDuration(value)))
+  appendNumber('sampleMs', (value) => t.admin.eventDetail.sampleLabel(formatDuration(value)))
+  appendNumber('textLength', (value) => t.admin.eventDetail.charsLabel(value))
+  appendNumber('charDelta', (value) => t.admin.eventDetail.charsDeltaLabel(value))
+  appendNumber('answerLength', (value) => t.admin.eventDetail.answerCharsLabel(value))
+  appendNumber('changeCount', (value) => t.admin.eventDetail.changesLabel(value))
+  appendNumber('selectedCount', (value) => t.admin.eventDetail.selectedLabel(value))
+  appendNumber('charsPerSecond', (value) => t.admin.eventDetail.charsPerSecondLabel(value))
   appendString('shortcut')
-  appendString('direction', 'navigation')
-  appendString('source', 'source')
-  appendString('reason', 'reason')
-  appendString('detector', 'detector')
+  appendString('direction', t.admin.eventDetail.navigationLabel)
+  appendString('source', t.admin.eventDetail.sourceLabel)
+  appendString('reason', t.admin.eventDetail.reasonLabel)
+  appendString('detector', t.admin.eventDetail.detectorLabel)
 
   const fromIndex = readFiniteNumber(payload, 'fromIndex')
   const toIndex = readFiniteNumber(payload, 'toIndex')
   if (fromIndex !== null || toIndex !== null) {
-    parts.push(`question ${(fromIndex ?? -1) + 1} → ${(toIndex ?? -1) + 1}`)
+    parts.push(t.admin.eventDetail.questionTransition((fromIndex ?? -1) + 1, (toIndex ?? -1) + 1))
     consumed.add('fromIndex')
     consumed.add('toIndex')
     consumed.add('fromQuestionId')
@@ -1537,7 +1512,7 @@ function getEventDetail(event: TimelineEvent) {
   const width = readFiniteNumber(payload, 'width')
   const height = readFiniteNumber(payload, 'height')
   if (width !== null || height !== null) {
-    parts.push(`viewport ${width ?? '?'}×${height ?? '?'}`)
+    parts.push(t.admin.eventDetail.viewportLabel(width ?? '?', height ?? '?'))
     consumed.add('width')
     consumed.add('height')
   }
@@ -1545,7 +1520,7 @@ function getEventDetail(event: TimelineEvent) {
   const widthDelta = readFiniteNumber(payload, 'widthDelta')
   const heightDelta = readFiniteNumber(payload, 'heightDelta')
   if (widthDelta !== null || heightDelta !== null) {
-    parts.push(`resize Δ${widthDelta ?? 0}×${heightDelta ?? 0}`)
+    parts.push(t.admin.eventDetail.resizeLabel(widthDelta ?? 0, heightDelta ?? 0))
     consumed.add('widthDelta')
     consumed.add('heightDelta')
   }
@@ -1553,7 +1528,7 @@ function getEventDetail(event: TimelineEvent) {
   const widthGap = readFiniteNumber(payload, 'widthGap')
   const heightGap = readFiniteNumber(payload, 'heightGap')
   if (widthGap !== null || heightGap !== null) {
-    parts.push(`window gap ${widthGap ?? 0}×${heightGap ?? 0}`)
+    parts.push(t.admin.eventDetail.windowGapLabel(widthGap ?? 0, heightGap ?? 0))
     consumed.add('widthGap')
     consumed.add('heightGap')
   }
@@ -1561,17 +1536,17 @@ function getEventDetail(event: TimelineEvent) {
   const x = readFiniteNumber(payload, 'x')
   const y = readFiniteNumber(payload, 'y')
   if (x !== null || y !== null) {
-    parts.push(`position ${x ?? '?'}×${y ?? '?'}`)
+    parts.push(t.admin.eventDetail.positionLabel(x ?? '?', y ?? '?'))
     consumed.add('x')
     consumed.add('y')
   }
 
-  appendNumber('clientSeq', (value) => `client seq ${value}`)
-  appendNumber('observedSeq', (value) => `observed seq ${value}`)
-  appendNumber('previousSeq', (value) => `previous seq ${value}`)
-  appendNumber('gap', (value) => `gap ${value}`)
-  appendNumber('threshold', (value) => `threshold ${value}`)
-  appendString('lastActivityAtUtc', 'last activity')
+  appendNumber('clientSeq', (value) => t.admin.eventDetail.clientSeqLabel(value))
+  appendNumber('observedSeq', (value) => t.admin.eventDetail.observedSeqLabel(value))
+  appendNumber('previousSeq', (value) => t.admin.eventDetail.previousSeqLabel(value))
+  appendNumber('gap', (value) => t.admin.eventDetail.gapLabel(value))
+  appendNumber('threshold', (value) => t.admin.eventDetail.thresholdLabel(value))
+  appendString('lastActivityAtUtc', t.admin.eventDetail.lastActivityLabel)
 
   for (const [key, value] of Object.entries(payload)) {
     if (consumed.has(key) || value === null || value === undefined) {
@@ -1584,7 +1559,7 @@ function getEventDetail(event: TimelineEvent) {
     }
   }
 
-  return parts.length > 0 ? parts.join(' · ') : 'Recorded behavioral signal'
+  return parts.length > 0 ? parts.join(' · ') : t.admin.eventDetail.recordedSignal
 }
 
 function parsePayload(payloadJson: string): JsonRecord {

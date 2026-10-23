@@ -116,7 +116,7 @@ public sealed class ExamSessionService : IExamSessionService
             throw new ApplicationValidationException("Exam has no questions.");
         }
 
-        var session = await _exams.GetActiveSessionAsync(examScheduleId, studentId, cancellationToken);
+        var session = await _exams.GetResumableSessionAsync(examScheduleId, studentId, cancellationToken);
         if (session is not null && session.EndsAtUtc <= now)
         {
             // The session's time ran out without the client ever calling submit (e.g. the tab
@@ -138,6 +138,14 @@ public sealed class ExamSessionService : IExamSessionService
             var endsAtUtc = schedule.EndsAtUtc!.Value;
             session = ExamSession.Start(schedule.Id, schedule.AssessmentId, studentId, trimmedName, now, endsAtUtc, consentAcceptedAtUtc);
             await _exams.AddSessionAsync(session, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        else if (session.Status == ExamSessionStatuses.Abandoned)
+        {
+            // The student came back with time left - revive the session so
+            // the silence monitor resumes watching it instead of leaving it
+            // abandoned while they keep working.
+            session.MarkActivity(now);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 

@@ -16,26 +16,16 @@ yarn-debug.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Local environment and secrets - never committed. Real credentials live
-# only in a local .env / DEPLOY_ACCESS.md / similar, generated per machine.
 *.local
 .env
 .env.*
 !.env.example
 !*/.env.example
-DEPLOY_ACCESS.md
+*.md
 *.pem
 *.key
 *secrets*
 !*secrets*.example
-
-# README/notes files - not documentation yet, just working notes. Tracked
-# README files that predate this rule (e.g. the repo root README.md
-# committed via dev-history-commits.sh) are unaffected; this only stops
-# NEW README-style files from being picked up until real docs are written.
-README.md
-TEMP_README.md
-**/README.md
 
 # TypeScript
 *.tsbuildinfo
@@ -60,8 +50,6 @@ __pycache__/
 .venv/
 venv/
 
-# Generated datasets (real student behavioral data - never committed;
-# only the folder structure + README under datasets/ are tracked)
 datasets/*.csv
 datasets/*.parquet
 

@@ -6,13 +6,16 @@ import { useAuth } from './features/auth/auth-context'
 import { AdminApp } from './features/dashboard/AdminApp'
 import { JoinExamPage } from './features/exams/JoinExamPage'
 import { StudentApp } from './features/exams/StudentApp'
+import { LanguageProvider } from './lib/i18n/LanguageContext'
 
 function App() {
   return (
-    <AuthProvider>
-      <AppRoutes />
-      <ToastContainer position="bottom-right" autoClose={2400} closeOnClick hideProgressBar newestOnTop pauseOnFocusLoss={false} />
-    </AuthProvider>
+    <LanguageProvider>
+      <AuthProvider>
+        <AppRoutes />
+        <ToastContainer position="bottom-right" autoClose={2400} closeOnClick hideProgressBar newestOnTop pauseOnFocusLoss={false} />
+      </AuthProvider>
+    </LanguageProvider>
   )
 }
 

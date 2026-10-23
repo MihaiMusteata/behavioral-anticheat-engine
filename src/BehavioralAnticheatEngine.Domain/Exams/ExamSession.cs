@@ -75,10 +75,27 @@ public sealed class ExamSession
 
     public void MarkActivity(DateTimeOffset activityAtUtc)
     {
+        // Any genuine activity means the student is back - revive a session
+        // the silence monitor had given up on, rather than leaving it stuck.
+        if (Status == ExamSessionStatuses.Abandoned)
+        {
+            Status = ExamSessionStatuses.Active;
+        }
+
         if (activityAtUtc > LastActivityAtUtc)
         {
             LastActivityAtUtc = activityAtUtc;
         }
+    }
+
+    public void MarkAbandoned()
+    {
+        if (Status != ExamSessionStatuses.Active)
+        {
+            return;
+        }
+
+        Status = ExamSessionStatuses.Abandoned;
     }
 
     public void Submit(DateTimeOffset submittedAtUtc)

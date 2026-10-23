@@ -113,13 +113,13 @@ public sealed class ExamRepository : IExamRepository
         await _dbContext.ExamSchedules.AddAsync(examSchedule, cancellationToken);
     }
 
-    public Task<ExamSession?> GetActiveSessionAsync(Guid examScheduleId, Guid studentId, CancellationToken cancellationToken = default)
+    public Task<ExamSession?> GetResumableSessionAsync(Guid examScheduleId, Guid studentId, CancellationToken cancellationToken = default)
     {
         return _dbContext.ExamSessions
             .FirstOrDefaultAsync(
                 session => session.ExamScheduleId == examScheduleId &&
                     session.StudentId == studentId &&
-                    session.Status == ExamSessionStatuses.Active,
+                    (session.Status == ExamSessionStatuses.Active || session.Status == ExamSessionStatuses.Abandoned),
                 cancellationToken);
     }
 
