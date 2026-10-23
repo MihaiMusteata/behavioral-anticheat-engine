@@ -4,6 +4,7 @@ import QRCode from 'qrcode'
 import { toast } from 'react-toastify'
 import { api, getAccessToken, getErrorMessage, resolveApiUrl } from '../../lib/api'
 import { Markdown } from '../../lib/markdown'
+import { markdownToPlainText } from '../../lib/markdownPlainText'
 import { Shell } from '../../shared/Shell'
 import { useLanguage } from '../../lib/i18n/language-context'
 import type { TranslationDictionary } from '../../lib/i18n/translations'
@@ -1443,10 +1444,15 @@ function TextSelectionHighlight({ event, timeline }: { event: TimelineEvent; tim
   }
 
   const question = timeline.questions.find((candidate) => candidate.questionId === event.questionId)
+  // The prompt renders as Markdown for the student (StudentApp.tsx), so the
+  // text-selection detector's offsets are computed against the rendered,
+  // syntax-stripped DOM, not the raw Markdown source - markdownToPlainText()
+  // reproduces that same stripping here so offsets line up. Option labels
+  // are never Markdown-rendered, so they stay raw.
   const sourceText = zone === 'question_option'
     ? question?.options.find((option) => option.optionId === optionId)?.label
     : zone === 'question_prompt'
-      ? question?.prompt
+      ? question && markdownToPlainText(question.prompt)
       : undefined
 
   if (!sourceText || endOffset > sourceText.length) {
