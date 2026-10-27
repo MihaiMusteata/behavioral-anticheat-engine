@@ -29,6 +29,8 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
 
     public DbSet<StudentAnswer> StudentAnswers => Set<StudentAnswer>();
 
+    public DbSet<CalibrationSample> CalibrationSamples => Set<CalibrationSample>();
+
     public DbSet<BehavioralEventRecord> BehavioralEvents => Set<BehavioralEventRecord>();
 
     public DbSet<SessionFeatureAggregate> SessionFeatureAggregates => Set<SessionFeatureAggregate>();

@@ -6,6 +6,7 @@ using BehavioralAnticheatEngine.Application.Common.Interfaces;
 using BehavioralAnticheatEngine.Application.Dashboard.Contracts;
 using BehavioralAnticheatEngine.Application.Exams.Contracts;
 using BehavioralAnticheatEngine.Domain.Exams;
+using Microsoft.Extensions.Logging;
 
 namespace BehavioralAnticheatEngine.Application.Exams;
 
@@ -19,6 +20,21 @@ public sealed class ExamSessionService : IExamSessionService
     // resource-constrained server with no other size limit in front of it.
     private const int MaxAnswerJsonLength = 20_000;
 
+    // Calibration is a handful of typed fields on the join screen (name,
+    // specialty) - these bounds exist only to stop an anonymous /guest/join
+    // caller from posting an oversized or nonsensical payload, not to allow
+    // for any realistic legitimate use beyond a couple of short fields.
+    private const int MaxCalibrationFieldsPerRequest = 5;
+    private const int MaxCalibrationCharacterCount = 300;
+    private const int MaxCalibrationDurationMs = 10 * 60 * 1000;
+    private const int MaxCalibrationCorrectionCount = 500;
+    private const int MaxCalibrationTimingsJsonLength = 8_000;
+    private static readonly HashSet<string> AllowedCalibrationFieldNames = new(StringComparer.Ordinal)
+    {
+        "participant_name",
+        "specialty",
+    };
+
     private readonly IExamRepository _exams;
     private readonly IAuthService _authService;
     private readonly IExamSessionSecretStore _sessionSecrets;
@@ -26,6 +42,7 @@ public sealed class ExamSessionService : IExamSessionService
     private readonly IDashboardEventBus _dashboardEvents;
     private readonly IUnitOfWork _unitOfWork;
     private readonly TimeProvider _timeProvider;
+    private readonly ILogger<ExamSessionService> _logger;
 
     public ExamSessionService(
         IExamRepository exams,
@@ -34,7 +51,8 @@ public sealed class ExamSessionService : IExamSessionService
         ILiveExamStateStore liveState,
         IDashboardEventBus dashboardEvents,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ILogger<ExamSessionService> logger)
     {
         _exams = exams;
         _authService = authService;
@@ -43,6 +61,7 @@ public sealed class ExamSessionService : IExamSessionService
         _dashboardEvents = dashboardEvents;
         _unitOfWork = unitOfWork;
         _timeProvider = timeProvider;
+        _logger = logger;
     }
 
     public async Task<GuestJoinResponse> JoinAsGuestAsync(JoinExamGuestRequest request, CancellationToken cancellationToken = default)
@@ -70,6 +89,21 @@ public sealed class ExamSessionService : IExamSessionService
         var auth = await _authService.JoinAsGuestAsync(request.ParticipantName, cancellationToken);
         var session = await StartSessionAsync(schedule.Id, auth.UserId, request.ParticipantName, now, cancellationToken);
 
+        if (request.CalibrationSamples is { Count: > 0 })
+        {
+            // Best-effort and fully isolated: calibration is a supplementary
+            // research signal, not part of the exam-join contract - nothing
+            // in here is allowed to turn a successful join into a failed one.
+            try
+            {
+                await SaveCalibrationSamplesAsync(session.SessionId, request.CalibrationSamples, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Failed to save calibration samples for session {SessionId}", session.SessionId);
+            }
+        }
+
         return new GuestJoinResponse(
             auth.UserId,
             auth.AccessToken,
@@ -77,6 +111,66 @@ public sealed class ExamSessionService : IExamSessionService
             auth.RefreshToken,
             auth.RefreshTokenExpiresAtUtc,
             session);
+    }
+
+    private async Task SaveCalibrationSamplesAsync(
+        Guid sessionId,
+        IReadOnlyCollection<CalibrationSampleRequest> samples,
+        CancellationToken cancellationToken)
+    {
+        var now = _timeProvider.GetUtcNow();
+        var saved = 0;
+
+        foreach (var sample in samples)
+        {
+            if (saved >= MaxCalibrationFieldsPerRequest)
+            {
+                break;
+            }
+
+            if (!AllowedCalibrationFieldNames.Contains(sample.FieldName))
+            {
+                continue;
+            }
+
+            if (sample.CharacterCount < 0 || sample.CharacterCount > MaxCalibrationCharacterCount)
+            {
+                continue;
+            }
+
+            if (sample.TotalDurationMs < 0 || sample.TotalDurationMs > MaxCalibrationDurationMs)
+            {
+                continue;
+            }
+
+            if (sample.CorrectionCount < 0 || sample.CorrectionCount > MaxCalibrationCorrectionCount)
+            {
+                continue;
+            }
+
+            var timingsJson = sample.KeystrokeTimingsJson;
+            if (string.IsNullOrWhiteSpace(timingsJson) || timingsJson.Length > MaxCalibrationTimingsJsonLength)
+            {
+                continue;
+            }
+
+            var entity = CalibrationSample.Create(
+                sessionId,
+                sample.FieldName,
+                sample.CharacterCount,
+                sample.TotalDurationMs,
+                sample.AverageCharsPerSecond,
+                sample.CorrectionCount,
+                timingsJson,
+                now);
+            await _exams.AddCalibrationSampleAsync(entity, cancellationToken);
+            saved++;
+        }
+
+        if (saved > 0)
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
     }
 
     public Task<StartExamSessionResponse> StartSessionAsync(Guid examScheduleId, Guid studentId, CancellationToken cancellationToken = default)

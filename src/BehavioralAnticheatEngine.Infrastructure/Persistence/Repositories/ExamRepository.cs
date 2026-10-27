@@ -177,4 +177,9 @@ public sealed class ExamRepository : IExamRepository
     {
         await _dbContext.StudentAnswers.AddAsync(answer, cancellationToken);
     }
+
+    public async Task AddCalibrationSampleAsync(CalibrationSample sample, CancellationToken cancellationToken = default)
+    {
+        await _dbContext.CalibrationSamples.AddAsync(sample, cancellationToken);
+    }
 }

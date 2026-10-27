@@ -128,6 +128,24 @@ public sealed class StudentAnswerConfiguration : IEntityTypeConfiguration<Studen
     }
 }
 
+public sealed class CalibrationSampleConfiguration : IEntityTypeConfiguration<CalibrationSample>
+{
+    public void Configure(EntityTypeBuilder<CalibrationSample> builder)
+    {
+        builder.ToTable("calibration_samples");
+        builder.HasKey(sample => sample.Id);
+        builder.Property(sample => sample.Id).ValueGeneratedNever();
+        builder.Property(sample => sample.FieldName).HasMaxLength(64).IsRequired();
+        builder.Property(sample => sample.CharacterCount).IsRequired();
+        builder.Property(sample => sample.TotalDurationMs).IsRequired();
+        builder.Property(sample => sample.AverageCharsPerSecond).IsRequired();
+        builder.Property(sample => sample.CorrectionCount).IsRequired();
+        builder.Property(sample => sample.KeystrokeTimingsJson).HasColumnType("jsonb").IsRequired();
+        builder.Property(sample => sample.CreatedAtUtc).IsRequired();
+        builder.HasIndex(sample => new { sample.SessionId, sample.FieldName });
+    }
+}
+
 public sealed class BehavioralEventRecordConfiguration : IEntityTypeConfiguration<BehavioralEventRecord>
 {
     public void Configure(EntityTypeBuilder<BehavioralEventRecord> builder)

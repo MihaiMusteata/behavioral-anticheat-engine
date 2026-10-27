@@ -274,6 +274,45 @@ namespace BehavioralAnticheatEngine.Infrastructure.Persistence.Migrations
                     b.ToTable("assessments", (string)null);
                 });
 
+            modelBuilder.Entity("BehavioralAnticheatEngine.Domain.Exams.CalibrationSample", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<double>("AverageCharsPerSecond")
+                        .HasColumnType("double precision");
+
+                    b.Property<int>("CharacterCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CorrectionCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FieldName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("KeystrokeTimingsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("TotalDurationMs")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId", "FieldName");
+
+                    b.ToTable("calibration_samples", (string)null);
+                });
+
             modelBuilder.Entity("BehavioralAnticheatEngine.Domain.Exams.ExamSchedule", b =>
                 {
                     b.Property<Guid>("Id")

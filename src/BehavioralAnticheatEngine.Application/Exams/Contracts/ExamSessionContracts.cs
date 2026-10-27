@@ -15,7 +15,22 @@ public sealed record StartExamSessionResponse(
 
 public sealed record ExistingAnswerDto(Guid QuestionId, string AnswerJson);
 
-public sealed record JoinExamGuestRequest(string PinCode, string ParticipantName, bool ConsentAccepted);
+public sealed record JoinExamGuestRequest(
+    string PinCode,
+    string ParticipantName,
+    bool ConsentAccepted,
+    IReadOnlyCollection<CalibrationSampleRequest>? CalibrationSamples = null);
+
+// One per typed field (e.g. "participant_name", "specialty"). Timing only -
+// the actual keys pressed are never sent, so this can't reconstruct what was
+// typed, only the rhythm it was typed with.
+public sealed record CalibrationSampleRequest(
+    string FieldName,
+    int CharacterCount,
+    int TotalDurationMs,
+    double AverageCharsPerSecond,
+    int CorrectionCount,
+    string KeystrokeTimingsJson);
 
 public sealed record GuestJoinResponse(
     Guid UserId,

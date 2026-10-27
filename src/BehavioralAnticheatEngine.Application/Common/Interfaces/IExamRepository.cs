@@ -48,4 +48,6 @@ public interface IExamRepository
     Task<List<StudentAnswer>> ListAnswersForSessionAsync(Guid sessionId, CancellationToken cancellationToken = default);
 
     Task AddAnswerAsync(StudentAnswer answer, CancellationToken cancellationToken = default);
+
+    Task AddCalibrationSampleAsync(CalibrationSample sample, CancellationToken cancellationToken = default);
 }
