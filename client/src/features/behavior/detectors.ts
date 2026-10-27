@@ -187,7 +187,8 @@ export class KeyboardShortcutDetector implements BehaviorDetector {
       (event.ctrlKey || event.metaKey) && ['C', 'V', 'X', 'P', 'F', 'A'].includes(key) ||
       shortcut === 'Ctrl+Shift+I' ||
       shortcut === 'Ctrl+Shift+J' ||
-      key === 'F12'
+      key === 'F12' ||
+      key === 'PrintScreen'
 
     if (!tracked) {
       return
@@ -196,6 +197,14 @@ export class KeyboardShortcutDetector implements BehaviorDetector {
     this.record?.('keyboard_shortcut', { shortcut })
     if ((event.ctrlKey || event.metaKey) && key === 'P') {
       this.record?.('print_attempt', { source: 'keyboard_shortcut' })
+    }
+    if (key === 'PrintScreen') {
+      // Unlike Alt+Tab/Win+D (OS-level, never reach the page), PrintScreen on
+      // Windows doesn't steal focus from the browser - this is one of the few
+      // screenshot paths actually observable from JS, so it gets its own
+      // print_attempt-style signal instead of relying on a blur/visibility
+      // event that will never fire for it.
+      this.record?.('print_attempt', { source: 'print_screen_key' })
     }
   }
 }
