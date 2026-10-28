@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react'
 import type { AuthUser, Role } from '../../lib/api'
 import type { StartExamSessionResponse } from '../exams/types'
+import type { CalibrationFieldSample } from '../calibration/useKeystrokeDynamics'
 
 export type AuthContextValue = {
   user: AuthUser | null
@@ -8,7 +9,12 @@ export type AuthContextValue = {
   restoredFromStorage: boolean
   login: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string, role: Exclude<Role, 'Admin'>) => Promise<void>
-  joinExam: (pinCode: string, participantName: string, consentAccepted: boolean) => Promise<StartExamSessionResponse>
+  joinExam: (
+    pinCode: string,
+    participantName: string,
+    consentAccepted: boolean,
+    calibrationSamples?: CalibrationFieldSample[],
+  ) => Promise<StartExamSessionResponse>
   logout: () => void
 }
 

@@ -32,8 +32,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role: response.data.role,
         })
       },
-      async joinExam(pinCode, participantName, consentAccepted) {
-        const response = await api.post<GuestJoinResponse>('/api/guest/join', { pinCode, participantName, consentAccepted })
+      async joinExam(pinCode, participantName, consentAccepted, calibrationSamples) {
+        const response = await api.post<GuestJoinResponse>('/api/guest/join', {
+          pinCode,
+          participantName,
+          consentAccepted,
+          calibrationSamples,
+        })
         const guestUser: AuthUser = { userId: response.data.userId, email: '', role: 'Student' }
         storeAuth({
           ...guestUser,

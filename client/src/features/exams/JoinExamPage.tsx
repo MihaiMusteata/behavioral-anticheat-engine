@@ -7,6 +7,7 @@ import { useAuth } from '../auth/auth-context'
 import { useLanguage } from '../../lib/i18n/language-context'
 import { LanguageSwitcher } from '../../lib/i18n/LanguageSwitcher'
 import { saveActiveExamScheduleId } from './examSessionStorage'
+import { useKeystrokeDynamics } from '../calibration/useKeystrokeDynamics'
 
 function readPinFromUrl() {
   try {
@@ -16,15 +17,30 @@ function readPinFromUrl() {
   }
 }
 
+type JoinStep = 'pin' | 'details'
+
 export function JoinExamPage({ onJoined }: { onJoined: () => void }) {
   const { joinExam } = useAuth()
   const { t } = useLanguage()
+  const [step, setStep] = useState<JoinStep>('pin')
   const [pinCode, setPinCode] = useState(readPinFromUrl)
   const [participantName, setParticipantName] = useState('')
+  const [specialty, setSpecialty] = useState('')
   const [consentAccepted, setConsentAccepted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const nameKeystrokes = useKeystrokeDynamics('participant_name')
+  const specialtyKeystrokes = useKeystrokeDynamics('specialty')
+
+  function handlePinSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (pinCode.trim().length !== 6) {
+      return
+    }
+    setStep('details')
+  }
+
+  async function handleDetailsSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
     if (!consentAccepted) {
@@ -35,7 +51,10 @@ export function JoinExamPage({ onJoined }: { onJoined: () => void }) {
     setSubmitting(true)
 
     try {
-      const session = await joinExam(pinCode.trim(), participantName.trim(), consentAccepted)
+      const calibrationSamples = [nameKeystrokes.getSample(), specialtyKeystrokes.getSample()].filter(
+        (sample) => sample !== null,
+      )
+      const session = await joinExam(pinCode.trim(), participantName.trim(), consentAccepted, calibrationSamples)
       saveActiveExamScheduleId(session.examScheduleId)
       onJoined()
     } catch (error) {
@@ -79,52 +98,95 @@ export function JoinExamPage({ onJoined }: { onJoined: () => void }) {
           </details>
         </div>
 
-        <form onSubmit={(event) => void handleSubmit(event)} className="rounded-lg border border-slate-300 bg-white p-5 shadow-sm">
-          <label className="mb-4 block text-sm font-medium text-slate-700">
-            {t.joinExam.accessPinLabel}
-            <input
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-3 text-center text-2xl font-bold tracking-[0.3em] text-slate-950 outline-none focus:border-emerald-600"
-              inputMode="numeric"
-              maxLength={6}
-              value={pinCode}
-              onChange={(event) => setPinCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
-              placeholder="000000"
-              required
-            />
-          </label>
+        {step === 'pin' ? (
+          <form onSubmit={handlePinSubmit} className="rounded-lg border border-slate-300 bg-white p-5 shadow-sm">
+            <label className="mb-4 block text-sm font-medium text-slate-700">
+              {t.joinExam.accessPinLabel}
+              <input
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-3 text-center text-2xl font-bold tracking-[0.3em] text-slate-950 outline-none focus:border-emerald-600"
+                inputMode="numeric"
+                maxLength={6}
+                value={pinCode}
+                onChange={(event) => setPinCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="000000"
+                autoFocus
+                required
+              />
+            </label>
 
-          <label className="mb-4 block text-sm font-medium text-slate-700">
-            {t.joinExam.nameLabel}
-            <input
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-emerald-600"
-              value={participantName}
-              onChange={(event) => setParticipantName(event.target.value)}
-              placeholder={t.joinExam.namePlaceholder}
-              maxLength={120}
-              required
-            />
-          </label>
+            <button
+              type="submit"
+              disabled={pinCode.trim().length !== 6}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 py-2.5 font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+            >
+              {t.joinExam.continueButton}
+              <Icon icon="mdi:arrow-right" className="h-5 w-5" />
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={(event) => void handleDetailsSubmit(event)} className="rounded-lg border border-slate-300 bg-white p-5 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setStep('pin')}
+              className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900"
+            >
+              <Icon icon="mdi:arrow-left" className="h-4 w-4" />
+              {t.joinExam.backButton}
+            </button>
 
-          <label className="mb-4 flex items-start gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-700"
-              checked={consentAccepted}
-              onChange={(event) => setConsentAccepted(event.target.checked)}
-              required
-            />
-            <span>{t.joinExam.consentCheckboxLabel}</span>
-          </label>
+            <label className="mb-4 block text-sm font-medium text-slate-700">
+              {t.joinExam.nameLabel}
+              <input
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-emerald-600"
+                value={participantName}
+                onChange={(event) => setParticipantName(event.target.value)}
+                onKeyDown={nameKeystrokes.onKeyDown}
+                onKeyUp={nameKeystrokes.onKeyUp}
+                placeholder={t.joinExam.namePlaceholder}
+                maxLength={120}
+                autoComplete="off"
+                autoFocus
+                required
+              />
+            </label>
 
-          <button
-            type="submit"
-            disabled={submitting || !consentAccepted}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 py-2.5 font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-          >
-            <Icon icon={submitting ? 'mdi:loading' : 'mdi:login-variant'} className={`h-5 w-5 ${submitting ? 'animate-spin' : ''}`} />
-            {submitting ? t.joinExam.joiningButton : t.joinExam.joinButton}
-          </button>
-        </form>
+            <label className="mb-4 block text-sm font-medium text-slate-700">
+              {t.joinExam.specialtyLabel}
+              <input
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-emerald-600"
+                value={specialty}
+                onChange={(event) => setSpecialty(event.target.value)}
+                onKeyDown={specialtyKeystrokes.onKeyDown}
+                onKeyUp={specialtyKeystrokes.onKeyUp}
+                placeholder={t.joinExam.specialtyPlaceholder}
+                maxLength={120}
+                autoComplete="off"
+                required
+              />
+              <span className="mt-1 block text-xs font-normal text-slate-500">{t.joinExam.specialtyHint}</span>
+            </label>
+
+            <label className="mb-4 flex items-start gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-700"
+                checked={consentAccepted}
+                onChange={(event) => setConsentAccepted(event.target.checked)}
+                required
+              />
+              <span>{t.joinExam.consentCheckboxLabel}</span>
+            </label>
+
+            <button
+              type="submit"
+              disabled={submitting || !consentAccepted}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 py-2.5 font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+            >
+              <Icon icon={submitting ? 'mdi:loading' : 'mdi:login-variant'} className={`h-5 w-5 ${submitting ? 'animate-spin' : ''}`} />
+              {submitting ? t.joinExam.joiningButton : t.joinExam.joinButton}
+            </button>
+          </form>
+        )}
       </section>
     </main>
   )
