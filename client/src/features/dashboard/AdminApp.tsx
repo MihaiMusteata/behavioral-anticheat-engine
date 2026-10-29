@@ -1005,7 +1005,7 @@ const DashboardPanel = forwardRef<DashboardPanelHandle, { exams: ExamSchedule[];
                   .map((question) => (
                     <div key={question.id} className="rounded-md border border-slate-200 p-3">
                       <div className="flex items-start justify-between gap-3">
-                        <p className="font-medium">{question.prompt}</p>
+                        <Markdown text={question.prompt} className="font-medium" />
                         <span className="shrink-0 text-xs text-slate-500">{question.points} pts</span>
                       </div>
                       <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">{question.type.replaceAll('_', ' ')}</p>
@@ -1017,7 +1017,7 @@ const DashboardPanel = forwardRef<DashboardPanelHandle, { exams: ExamSchedule[];
                                 icon={option.isCorrect ? 'mdi:check-circle' : 'mdi:circle-outline'}
                                 className={option.isCorrect ? 'h-4 w-4 shrink-0 text-emerald-600' : 'h-4 w-4 shrink-0 text-slate-300'}
                               />
-                              {option.label}
+                              <Markdown text={option.label} />
                             </li>
                           ))}
                         </ul>
@@ -1444,13 +1444,16 @@ function TextSelectionHighlight({ event, timeline }: { event: TimelineEvent; tim
   }
 
   const question = timeline.questions.find((candidate) => candidate.questionId === event.questionId)
-  // The prompt renders as Markdown for the student (StudentApp.tsx), so the
-  // text-selection detector's offsets are computed against the rendered,
-  // syntax-stripped DOM, not the raw Markdown source - markdownToPlainText()
-  // reproduces that same stripping here so offsets line up. Option labels
-  // are never Markdown-rendered, so they stay raw.
+  // Both the prompt and option labels render as Markdown for the student
+  // (StudentApp.tsx), so the text-selection detector's offsets are computed
+  // against the rendered, syntax-stripped DOM, not the raw Markdown source -
+  // markdownToPlainText() reproduces that same stripping here so offsets
+  // line up for either zone.
   const sourceText = zone === 'question_option'
-    ? question?.options.find((option) => option.optionId === optionId)?.label
+    ? (() => {
+        const label = question?.options.find((option) => option.optionId === optionId)?.label
+        return label !== undefined ? markdownToPlainText(label) : undefined
+      })()
     : zone === 'question_prompt'
       ? question && markdownToPlainText(question.prompt)
       : undefined

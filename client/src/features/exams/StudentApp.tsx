@@ -527,7 +527,9 @@ function QuestionAnswer({ question, value, onChange }: { question: Question; val
                 }
               }}
             />
-            <span data-bae-zone="question_option" data-option-id={option.id}>{option.label}</span>
+            <span data-bae-zone="question_option" data-option-id={option.id}>
+              <Markdown text={option.label} />
+            </span>
           </label>
         )
       })}
