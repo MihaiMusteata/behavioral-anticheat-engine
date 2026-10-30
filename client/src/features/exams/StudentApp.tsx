@@ -19,6 +19,48 @@ import type { ExistingAnswer, Question, StartExamSessionResponse, SubmitExamResp
 
 type AnswerValue = string | string[]
 
+// Gap between two consecutive edits of a free_text answer, above which it's
+// treated as a thinking/composition pause rather than typing rhythm - normal
+// continuous typing keeps inter-keystroke gaps well under this.
+const typingPauseThresholdMs = 2000
+
+type AnswerStats = {
+  changes: number
+  lastLength: number
+  lastAt: number
+  sampleLength: number
+  sampleAt: number
+  activeMs: number
+  pauseMs: number
+  pauseCount: number
+}
+
+// charsPerSecond = "total" speed, pauses included (elapsed wall-clock time).
+// activeCharsPerSecond = "clean" speed, pauses excluded - comparable against
+// the join-screen calibration baseline, which has no composition pauses to
+// begin with. Both ship together so either can be used or excluded later.
+function buildTypingSpeedPayload(params: {
+  questionId: string
+  charsAdded: number
+  totalMs: number
+  activeMs: number
+  pauseMs: number
+  pauseCount: number
+  answerLength: number
+}) {
+  const { questionId, charsAdded, totalMs, activeMs, pauseMs, pauseCount, answerLength } = params
+  return {
+    questionId,
+    charsPerSecond: totalMs > 0 ? Math.max(charsAdded / (totalMs / 1000), 0) : 0,
+    activeCharsPerSecond: activeMs > 0 ? Math.max(charsAdded / (activeMs / 1000), 0) : 0,
+    sampleMs: totalMs,
+    activeMs,
+    pauseMs,
+    pauseCount,
+    answerLength,
+  }
+}
+
 export function StudentApp() {
   const { restoredFromStorage, logout } = useAuth()
   const { t } = useLanguage()
@@ -117,12 +159,53 @@ function ExamRunner({
     !submitted,
     isRestored ? 'restored_from_storage' : null,
   )
-  const answerStats = useRef<Record<string, { changes: number; lastLength: number; lastAt: number; sampleLength: number; sampleAt: number }>>({})
+  const answerStats = useRef<Record<string, AnswerStats>>({})
   const activeQuestionViewRef = useRef<{ questionId: string; questionIndex: number; orderIndex: number; startedAt: number } | null>(null)
   const submitInProgressRef = useRef(false)
   const submittedRef = useRef(false)
   const question = session.assessment.questions[currentIndex]
   const remainingMs = Math.max(new Date(session.endsAtUtc).getTime() - now, 0)
+  // Always up to date by the time any effect/handler runs, unlike `question`
+  // itself inside a closure captured by an effect with unrelated deps (see
+  // handleBeforeUnload below) - plain assignment during render, no effect
+  // needed, since refs don't trigger re-renders.
+  const currentQuestionIdRef = useRef(question.id)
+  currentQuestionIdRef.current = question.id
+
+  // The periodic typing_speed_sample inside updateAnswer() only fires on the
+  // next keystroke, gated by a >=5s threshold since the last sample - so the
+  // trailing stretch of typing (anything under 5s since the last flush)
+  // never gets emitted on its own. Called on navigate/submit/unload to flush
+  // that remainder instead of silently dropping it.
+  const flushTypingSpeedSample = useCallback(
+    (questionId: string) => {
+      const stats = answerStats.current[questionId]
+      if (!stats || stats.lastAt <= stats.sampleAt || stats.lastLength === stats.sampleLength) {
+        return
+      }
+
+      const targetQuestion = session.assessment.questions.find((candidate) => candidate.id === questionId)
+      if (targetQuestion?.type !== 'free_text') {
+        return
+      }
+
+      behavior.record('typing_speed_sample', buildTypingSpeedPayload({
+        questionId,
+        charsAdded: stats.lastLength - stats.sampleLength,
+        totalMs: stats.lastAt - stats.sampleAt,
+        activeMs: stats.activeMs,
+        pauseMs: stats.pauseMs,
+        pauseCount: stats.pauseCount,
+        answerLength: stats.lastLength,
+      }))
+      stats.sampleAt = stats.lastAt
+      stats.sampleLength = stats.lastLength
+      stats.activeMs = 0
+      stats.pauseMs = 0
+      stats.pauseCount = 0
+    },
+    [behavior, session.assessment.questions],
+  )
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
@@ -135,13 +218,14 @@ function ExamRunner({
         return
       }
 
+      flushTypingSpeedSample(currentQuestionIdRef.current)
       behavior.record('session_end', { reason: 'window_closed', questionId: null, questionIndex: null })
       void behavior.flush(true)
     }
 
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [behavior])
+  }, [behavior, flushTypingSpeedSample])
 
   const endActiveQuestionView = useCallback(() => {
     const activeView = activeQuestionViewRef.current
@@ -233,6 +317,7 @@ function ExamRunner({
       return
     }
 
+    flushTypingSpeedSample(question.id)
     const nextQuestion = session.assessment.questions[nextIndex]
     behavior.record('question_navigation', {
       fromQuestionId: question.id,
@@ -256,6 +341,9 @@ function ExamRunner({
       lastAt: Date.now(),
       sampleLength: getAnswerLength(previous),
       sampleAt: Date.now(),
+      activeMs: 0,
+      pauseMs: 0,
+      pauseCount: 0,
     }
     const changedAt = Date.now()
     const answerLength = getAnswerLength(value)
@@ -282,16 +370,29 @@ function ExamRunner({
         })
       }
 
+      if (elapsedMs >= typingPauseThresholdMs) {
+        stats.pauseMs += elapsedMs
+        stats.pauseCount += 1
+      } else {
+        stats.activeMs += elapsedMs
+      }
+
       const sampleElapsedMs = changedAt - stats.sampleAt
       if (sampleElapsedMs >= 5000) {
-        behavior.record('typing_speed_sample', {
+        behavior.record('typing_speed_sample', buildTypingSpeedPayload({
           questionId: question.id,
-          charsPerSecond: Math.max((answerLength - stats.sampleLength) / (sampleElapsedMs / 1000), 0),
-          sampleMs: sampleElapsedMs,
+          charsAdded: answerLength - stats.sampleLength,
+          totalMs: sampleElapsedMs,
+          activeMs: stats.activeMs,
+          pauseMs: stats.pauseMs,
+          pauseCount: stats.pauseCount,
           answerLength,
-        })
+        }))
         stats.sampleAt = changedAt
         stats.sampleLength = answerLength
+        stats.activeMs = 0
+        stats.pauseMs = 0
+        stats.pauseCount = 0
       }
     }
 
@@ -315,6 +416,7 @@ function ExamRunner({
     }
 
     try {
+      flushTypingSpeedSample(question.id)
       endActiveQuestionView()
       await behavior.endSession('submit')
       const response = await submitExamSecure<SubmitExamResponse>(session.sessionId, session.behaviorSigningSecret)
@@ -332,7 +434,7 @@ function ExamRunner({
       submitInProgressRef.current = false
       setSubmitting(false)
     }
-  }, [answers, behavior, endActiveQuestionView, question, saveCurrentAnswer, session.behaviorSigningSecret, session.sessionId, t])
+  }, [answers, behavior, endActiveQuestionView, flushTypingSpeedSample, question, saveCurrentAnswer, session.behaviorSigningSecret, session.sessionId, t])
 
   useEffect(() => {
     if (remainingMs === 0 && !submitted) {
