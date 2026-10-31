@@ -149,7 +149,6 @@ function ExamRunner({
   const [submitted, setSubmitted] = useState(false)
   const [showSelfReportModal, setShowSelfReportModal] = useState(false)
   const [selfReportSubmitting, setSelfReportSubmitting] = useState(false)
-  const [finalScore, setFinalScore] = useState<number | null>(null)
   const [showResult, setShowResult] = useState(false)
   const [questionViewGeneration, setQuestionViewGeneration] = useState(0)
   const [now, setNow] = useState(Date.now())
@@ -419,8 +418,7 @@ function ExamRunner({
       flushTypingSpeedSample(question.id)
       endActiveQuestionView()
       await behavior.endSession('submit')
-      const response = await submitExamSecure<SubmitExamResponse>(session.sessionId, session.behaviorSigningSecret)
-      setFinalScore(response.score)
+      await submitExamSecure<SubmitExamResponse>(session.sessionId, session.behaviorSigningSecret)
       submittedRef.current = true
       setSubmitted(true)
       behavior.clearSessionState()
@@ -454,8 +452,6 @@ function ExamRunner({
       setShowResult(true)
     }
   }
-
-  const totalPoints = session.assessment.questions.reduce((sum, item) => sum + item.points, 0)
 
   return (
     <section className="grid gap-4 lg:grid-cols-[260px_1fr]">
@@ -566,15 +562,7 @@ function ExamRunner({
           <div className="w-full max-w-sm rounded-lg bg-white p-6 text-center shadow-xl">
             <Icon icon="mdi:check-circle" className="mx-auto h-10 w-10 text-emerald-600" />
             <h3 className="mt-2 text-lg font-semibold text-slate-900">{t.studentApp.resultTitle}</h3>
-            {finalScore !== null ? (
-              <p className="mt-3 text-3xl font-bold tabular-nums text-slate-950">
-                {finalScore} <span className="text-lg font-medium text-slate-500">{t.studentApp.resultScoreOutOf(totalPoints)}</span>
-              </p>
-            ) : (
-              <p className="mt-3 text-sm text-slate-600">
-                {t.studentApp.resultPendingManualGrading}
-              </p>
-            )}
+            <p className="mt-3 text-sm text-slate-600">{t.studentApp.resultRecorded}</p>
             <button
               type="button"
               onClick={onFinished}
