@@ -12,10 +12,12 @@ function readStoredLanguage(): Language {
       return stored
     }
   } catch {
-    // localStorage unavailable (private browsing, etc.) - fall through to browser detection.
+    // localStorage unavailable (private browsing, etc.) - fall through to the hardcoded default.
   }
 
-  return navigator.language.toLowerCase().startsWith('ro') ? 'ro' : 'en'
+  // Hardcoded default, no browser-language detection - a manual switch (the
+  // language switcher) still overrides this and persists via storageKey.
+  return 'ro'
 }
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
