@@ -50,8 +50,13 @@ __pycache__/
 .venv/
 venv/
 
-datasets/*.csv
-datasets/*.parquet
+# Everything exported into datasets/ (CSV, parquet, Excel, whatever format
+# comes next) stays local until deliberately processed/curated - only the
+# license file is meant to be tracked here. Blanket-ignore + explicit
+# allowlist instead of listing extensions one by one, so a new export format
+# can't slip through uncovered.
+datasets/*
+!datasets/LICENSE
 
 # Editor and OS files
 .idea/
