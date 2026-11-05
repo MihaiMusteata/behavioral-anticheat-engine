@@ -1,0 +1,100 @@
+{
+  "model": "06_calibration_deviation",
+  "level": "session",
+  "scheme": "logo",
+  "params": {
+    "personal_burst_ratio": 3.0,
+    "fast_ratio": 2.0,
+    "features": [
+      "log_clean_ratio",
+      "log_p90_ratio",
+      "share_samples_gt2",
+      "share_samples_gt3",
+      "share_chars_gt3"
+    ],
+    "distance": "one-sided scaled Manhattan (Killourhy & Maxion 2009)",
+    "template": "natural sessions of the training fold",
+    "calibration": "Platt on log1p(distance)"
+  },
+  "coverage": 0.6967741935483871,
+  "overall": {
+    "n": 216,
+    "positives": 87,
+    "roc_auc": 0.7503341352579525,
+    "pr_auc": 0.7522684978792993,
+    "brier": 0.18439137992225746,
+    "accuracy@0.5": 0.7407407407407407,
+    "precision@0.5": 0.7066666666666667,
+    "recall@0.5": 0.6091954022988506,
+    "f1@0.5": 0.654320987654321,
+    "false_positive_rate@0.5": 0.17054263565891473,
+    "recall@fpr<=0.05": 0.39080459770114945,
+    "recall@fpr<=0.10": 0.5057471264367817
+  },
+  "roc_auc_ci95_group_bootstrap": [
+    0.6465825905460999,
+    0.8411896943399597
+  ],
+  "pr_auc_ci95_group_bootstrap": [
+    0.4940453474338618,
+    0.9102993814048781
+  ],
+  "by_test": {
+    "APA": {
+      "n": 66,
+      "positives": 13,
+      "roc_auc": 0.7503628447024673,
+      "pr_auc": 0.5146836767879412,
+      "brier": 0.17357358109284204,
+      "accuracy@0.5": 0.7575757575757576,
+      "precision@0.5": 0.42857142857142855,
+      "recall@0.5": 0.6923076923076923,
+      "f1@0.5": 0.5294117647058824,
+      "false_positive_rate@0.5": 0.22641509433962265,
+      "recall@fpr<=0.05": 0.15384615384615385,
+      "recall@fpr<=0.10": 0.5384615384615384
+    },
+    "PC": {
+      "n": 43,
+      "positives": 20,
+      "roc_auc": 0.741304347826087,
+      "pr_auc": 0.8534919549215035,
+      "brier": 0.160722806233146,
+      "accuracy@0.5": 0.813953488372093,
+      "precision@0.5": 1.0,
+      "recall@0.5": 0.6,
+      "f1@0.5": 0.75,
+      "false_positive_rate@0.5": 0.0,
+      "recall@fpr<=0.05": 0.7,
+      "recall@fpr<=0.10": 0.75
+    },
+    "POO": {
+      "n": 39,
+      "positives": 25,
+      "roc_auc": 0.6142857142857143,
+      "pr_auc": 0.8001359129440733,
+      "brier": 0.26431626946417924,
+      "accuracy@0.5": 0.6153846153846154,
+      "precision@0.5": 0.7777777777777778,
+      "recall@0.5": 0.56,
+      "f1@0.5": 0.6511627906976745,
+      "false_positive_rate@0.5": 0.2857142857142857,
+      "recall@fpr<=0.05": 0.28,
+      "recall@fpr<=0.10": 0.28
+    },
+    "TPA": {
+      "n": 68,
+      "positives": 29,
+      "roc_auc": 0.8532272325375774,
+      "pr_auc": 0.8353148134465684,
+      "brier": 0.16401862549929072,
+      "accuracy@0.5": 0.75,
+      "precision@0.5": 0.75,
+      "recall@0.5": 0.6206896551724138,
+      "f1@0.5": 0.6792452830188679,
+      "false_positive_rate@0.5": 0.15384615384615385,
+      "recall@fpr<=0.05": 0.5172413793103449,
+      "recall@fpr<=0.10": 0.5517241379310345
+    }
+  }
+}
