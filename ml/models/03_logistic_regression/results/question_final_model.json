@@ -1,0 +1,9 @@
+{
+  "model": "03_logistic_regression",
+  "level": "question",
+  "trained_on_rows": 4258,
+  "trained_on_sessions": 310,
+  "predicts_rows": 4258,
+  "file": "artifacts/question_model.joblib",
+  "roundtrip_check": "passed"
+}
