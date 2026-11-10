@@ -49,9 +49,13 @@ PARAMS = {
 
 
 def fit(train: pd.DataFrame, features: list[str]) -> dict:
+    x, y = train[features].to_numpy(dtype=float), train["label"].to_numpy()
     model = TabPFNClassifier(**PARAMS)
-    model.fit(train[features].to_numpy(dtype=float), train["label"].to_numpy())
-    return {"model": model, "features": features}
+    model.fit(x, y)
+    # The training context is kept so ml-service can rebuild the model with
+    # fit_mode="fit_with_cache" at startup (identical predictions, ~0.3 s per
+    # call instead of ~14-55 s on CPU) without pickling the 0.5 GB cache.
+    return {"model": model, "features": features, "x_train": x, "y_train": y, "params": PARAMS}
 
 
 def predict(fitted: dict, test: pd.DataFrame) -> np.ndarray:

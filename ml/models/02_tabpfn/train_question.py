@@ -47,9 +47,10 @@ PARAMS = {**voter.PARAMS, "n_estimators": 1, "ignore_pretraining_limits": True}
 
 
 def fit(train: pd.DataFrame, features: list[str], fit_mode: str = "fit_preprocessors") -> dict:
+    x, y = train[features].to_numpy(dtype=float), train["label"].to_numpy()
     model = TabPFNClassifier(**PARAMS, fit_mode=fit_mode)
-    model.fit(train[features].to_numpy(dtype=float), train["label"].to_numpy())
-    return {"model": model, "features": features}
+    model.fit(x, y)
+    return {"model": model, "features": features, "x_train": x, "y_train": y, "params": PARAMS}
 
 
 def main() -> None:
