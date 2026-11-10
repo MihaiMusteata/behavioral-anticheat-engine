@@ -78,3 +78,12 @@ october-history-commits.sh
 ml/**/artifacts/
 # Local backdating scripts (run by hand, never committed)
 *-history-commits.sh
+
+# Backups pulled from the production VPS (DB dump with student data + secrets)
+server-backup/
+
+# Thesis-only material, not part of the system: exploratory analysis (EDA)
+# and the figures generated for the thesis text
+ml/eda/
+ml/evaluation/figures/
+ml/evaluation/figures.py
