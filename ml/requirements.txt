@@ -9,3 +9,5 @@ tabpfn==2.0.9  # pulls torch; open-weights TabPFN v2 (Nature 2025)
 sktime==1.2.0  # MiniRocketMultivariate
 numba==0.68.1  # required by sktime rocket transformers
 statsmodels==0.15.0  # SARIMAX (ARIMAX)
+fastapi==0.115.6  # ml/service HTTP API
+uvicorn==0.34.0
