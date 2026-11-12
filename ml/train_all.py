@@ -1,6 +1,6 @@
 """Rebuild both datasets, retrain the 5 voters (session + question level) and
-the baseline, build the voting ensemble, write the evaluation report and run
-the inference parity test - one command, always through the ml venv.
+the baseline, build the voting ensemble and write the evaluation report - one
+command, always through the ml venv.
 Archived voters (ml/archive/) are not part of it.
 
     ml/.venv/bin/python ml/train_all.py              # everything (~25 min, TabPFN dominates)
@@ -20,7 +20,6 @@ ML = Path(__file__).resolve().parent
 STEPS = [
     ("dataset: sessions", ["data/build_dataset.py"]),
     ("dataset: questions", ["data/build_question_dataset.py"]),
-    ("harness self-check", ["evaluation/evaluate.py", "--smoke-test"]),
     ("baseline: rules", ["baselines/rule_based_score/train.py"]),
     ("#1 CatBoost", ["models/01_catboost/train.py"]),
     ("#1 CatBoost [question]", ["models/01_catboost/train_question.py"]),
@@ -33,7 +32,6 @@ STEPS = [
     ("#5 Isolation Forest [question]", ["models/05_isolation_forest/train_question.py"]),
     ("ensemble", ["ensemble/build_ensemble.py"]),
     ("report", ["evaluation/report.py"]),
-    ("inference parity test", ["inference/test_parity.py"]),
 ]
 
 

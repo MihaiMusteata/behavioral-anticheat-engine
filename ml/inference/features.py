@@ -2,8 +2,7 @@
 
 Every transformation is delegated to ml/data (build_dataset.clean_events,
 assemble_session_features, heartbeat_rows; build_question_dataset.question_rows),
-so a live session goes through the same code as the training data -
-ml/inference/test_parity.py proves it on all 310 historical sessions.
+so a live session goes through the same code as the training data.
 
 Payload (JSON, camelCase - field names follow the database / C# entities):
 
@@ -115,8 +114,8 @@ def payload_to_tables(payload: dict, question_norms: dict) -> dict[str, pd.DataF
 
 def payload_from_dump(session_id: str) -> dict:
     """Build the payload of a historical session from datasets/db_*.csv -
-    exactly what the backend will send for a live one. Used by cli.py and
-    test_parity.py; not needed in production."""
+    exactly what the backend will send for a live one. Used by cli.py; not
+    needed in production."""
     raw = _dump()
     s = raw["sessions"].set_index("Id").loc[session_id]
     qs = raw["questions"][raw["questions"]["AssessmentId"] == s["AssessmentId"]]

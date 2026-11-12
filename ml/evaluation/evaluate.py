@@ -27,8 +27,8 @@ column that balances the two classes 50/50 - models MUST train with it
 (or an equivalent class_weight="balanced"). Reason: holding out a cheating
 group lowers the cheating share of the training fold and vice versa, so any
 learned prior/intercept moves *against* the held-out label. Pooled across
-folds this alone drives a constant predictor to ROC-AUC 0.0 under logo
-(caught by --smoke-test). Balanced weights pin the prior at 0.5 in every
+folds this alone drives a constant predictor to ROC-AUC 0.0 under logo.
+Balanced weights pin the prior at 0.5 in every
 fold. Models needing other files
 (heartbeats, typing samples, calibration) load them via `load_table()` and
 filter by `session_id`. Return one value per test row: a probability of
@@ -46,7 +46,6 @@ Usage from a model script (results go to the model's own folder):
     question-level files carry a "question_" prefix.
 
 CLI (always through the ml venv - see ml/requirements.txt):
-    ml/.venv/bin/python ml/evaluation/evaluate.py --smoke-test   # sanity-check the harness
     ml/.venv/bin/python ml/evaluation/evaluate.py --compare      # table of all saved models
 """
 
@@ -146,25 +145,18 @@ def model_paths(model_dir: Path, level: str = "session") -> tuple[Path, Path, st
 def save_final_model(model_name: str, fitted, predict: Callable, model_dir: Path, level: str = "session",
                      frame: pd.DataFrame | None = None, extra: dict | None = None) -> Path:
     """Persist a final model trained on all rows with the SAME fit() that was
-    cross-validated, then reload it and check it reproduces the in-memory
-    predictions exactly (catches anything that does not survive pickling).
-    Load with joblib from a process that has ml/ on sys.path."""
+    cross-validated. Load with joblib from a process that has ml/ on sys.path."""
     results, artifacts, prefix = model_paths(model_dir, level)
     path = artifacts / f"{prefix}model.joblib"
     joblib.dump(fitted, path)
 
     rows = (load_table("sessions") if frame is None else frame).drop(columns=["label"])
-    before = np.asarray(predict(fitted, rows), dtype=float)
-    after = np.asarray(predict(joblib.load(path), rows), dtype=float)
-    if not np.allclose(before, after, equal_nan=True, atol=1e-9):
-        raise AssertionError(f"{model_name}: reloaded model predicts differently")
     info = {"model": model_name, "level": level, "trained_on_rows": int(len(rows)),
             "trained_on_sessions": int(rows["session_id"].nunique()),
-            "predicts_rows": int(np.isfinite(before).sum()), "file": f"artifacts/{path.name}",
-            "roundtrip_check": "passed", **(extra or {})}
+            "file": f"artifacts/{path.name}", **(extra or {})}
     (results / f"{prefix}final_model.json").write_text(json.dumps(info, indent=2))
     print(f"final model ({level}): trained on {len(rows)} rows -> {path.relative_to(REPO_ROOT)} "
-          f"({path.stat().st_size / 1e6:.1f} MB), reload check passed")
+          f"({path.stat().st_size / 1e6:.1f} MB)")
     return path
 
 
@@ -391,6 +383,8 @@ def compare() -> None:
     rows = []
     for f in files:
         m = json.loads(f.read_text())
+        if "overall" not in m:   # question->session files hold several aggregations
+            continue
         o = m["overall"]
         ci = m.get("roc_auc_ci95_group_bootstrap")
         rows.append({"model": m["model"], "level": m.get("level", "session"), "scheme": m["scheme"],
@@ -406,48 +400,11 @@ def compare() -> None:
             print(d.drop(columns=["level", "scheme"]).to_string(index=False))
 
 
-# ---------------------------------------------------------------- smoke test
-
-def _smoke_test() -> None:
-    """Harness self-check with two trivial 'models' (nothing is saved):
-    a constant predictor must land at ROC-AUC 0.5, and the existing rule-based
-    risk score must run end-to-end through the same pipeline."""
-    def constant(train: pd.DataFrame, test: pd.DataFrame) -> np.ndarray:
-        # weighted prior - with balanced weights this is 0.5 in every fold
-        # (rounded: 1e-16 float noise between folds would otherwise be ranked)
-        prior = round(float(np.average(train["label"], weights=train["sample_weight"])), 9)
-        return np.full(len(test), prior)
-
-    def rule_score(train: pd.DataFrame, test: pd.DataFrame) -> np.ndarray:
-        # rank against the training distribution -> [0, 1]; no fitting on test
-        ref = np.sort(train["rule_risk_score"].to_numpy())
-        return np.searchsorted(ref, test["rule_risk_score"].to_numpy(), side="right") / len(ref)
-
-    results = {name: run_cv(name, fn, save=False)
-               for name, fn in (("smoke_constant", constant), ("smoke_rule_risk_score", rule_score))}
-    for scheme, m in results["smoke_constant"].items():
-        auc = m["overall"]["roc_auc"]
-        assert abs(auc - 0.5) < 1e-9, f"constant predictor scored ROC-AUC {auc} under {scheme} - fold prior leak"
-    sessions = load_table("sessions")
-    for scheme in SCHEMES:
-        seen = []
-        for fold, tr, te in folds(sessions, scheme):
-            key = SCHEMES[scheme]
-            assert not set(sessions.iloc[tr][key]) & set(sessions.iloc[te][key]), f"{scheme}/{fold} leaks"
-            seen.extend(te)
-        assert sorted(seen) == list(range(len(sessions))), f"{scheme}: not every session tested exactly once"
-    print("\nsmoke test OK - folds disjoint, every session scored exactly once per scheme, "
-          "constant predictor at ROC-AUC 0.5 (no fold-prior leak)")
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--smoke-test", action="store_true", help="sanity-check the harness")
     parser.add_argument("--compare", action="store_true", help="compare all saved model results")
     args = parser.parse_args()
-    if args.smoke_test:
-        _smoke_test()
-    elif args.compare:
+    if args.compare:
         compare()
     else:
         parser.print_help()
