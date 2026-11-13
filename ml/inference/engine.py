@@ -42,7 +42,7 @@ import pandas as pd
 
 ML_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ML_DIR))   # pickled models reference evaluation.* helpers
-from ensemble.voting import decide, soft_vote  # noqa: E402
+from ensemble.voting import decide, decide_majority, majority_votes, soft_vote  # noqa: E402
 from inference.features import payload_to_tables  # noqa: E402
 
 DATA_DIR = ML_DIR.parent / "datasets" / "ml"
@@ -80,9 +80,27 @@ def _clean(v):
     return int(v)
 
 
+# Production default (same as ml-service): TabPFN at question level is off -
+# with 4,258 context rows it costs ~33 s per call uncached, and its cache
+# grows with context x queries (a full-dataset run used ~30 GB RAM).
+DEFAULT_SKIP: dict[str, list[str]] = {"question": ["02_tabpfn"]}
+
+
+def _with_tabpfn_cache(fitted: dict) -> dict:
+    """Rebuild a saved TabPFN voter with fit_mode="fit_with_cache": the
+    training context is encoded once here, so every predict() skips it.
+    Same model, same context, same predictions (verified: max diff 0.0000
+    over 310 sessions); ~0.3 s per call instead of 14-55 s on CPU. Costs
+    ~0.5 GB RAM and a few seconds at startup instead of 0.5 GB on disk."""
+    from tabpfn import TabPFNClassifier
+    model = TabPFNClassifier(**fitted["params"], fit_mode="fit_with_cache")
+    model.fit(fitted["x_train"], fitted["y_train"])
+    return {**fitted, "model": model}
+
+
 class DetectionEngine:
     def __init__(self, ml_dir: Path = ML_DIR, norms_path: Path = DATA_DIR / "question_norms.json",
-                 skip_voters: dict[str, list[str]] | None = None):
+                 skip_voters: dict[str, list[str]] | None = DEFAULT_SKIP, cache_tabpfn: bool = True):
         """skip_voters: e.g. {"question": ["02_tabpfn"]} to trade a voter for
         speed (TabPFN at question level costs ~33 s per session on CPU). The
         vote renormalises its weights over the remaining voters."""
@@ -99,6 +117,8 @@ class DetectionEngine:
         for name in self.config["session"]["voters"]:
             module = _module(models_dir / name / "train.py", f"voter_{name}")
             fitted = joblib.load(models_dir / name / "artifacts" / "model.joblib")
+            if name == "02_tabpfn" and cache_tabpfn and "x_train" in fitted:
+                fitted = _with_tabpfn_cache(fitted)
             if "rocket" in fitted:
                 # Saved with n_jobs=-1 on the training machine; sktime resolves
                 # that to os.cpu_count(), which crashes numba when fewer threads
@@ -158,15 +178,18 @@ class DetectionEngine:
             mask = questions["session_id"] == sid
             qrows, qp = questions[mask], q_probs[mask]
             qscore = soft_vote(qp, qc["weights"])
+            suspect_votes, voted = majority_votes(qp, qc["threshold"])
             for i in qrows.sort_values("question_index").index:
                 r = qrows.loc[i]
                 s = float(qscore.loc[i])
+                outcome = decide_majority(int(suspect_votes.loc[i]), int(voted.loc[i]), s, qc["strict_threshold"])
                 qs.append({
                     "questionId": r["question_id"], "questionIndex": int(r["question_index"]),
                     "questionType": r["question_type"],
                     "models": {n: _vote(qp.loc[i, n], qc["threshold"]) for n in qc["voters"]},
-                    "ensemble": {"score": None if np.isnan(s) else round(s, 4),
-                                 **decide(s, qc["threshold"], qc["strict_threshold"]), "method": qc["method"]},
+                    "ensemble": {"score": None if np.isnan(s) else round(s, 4), **outcome,
+                                 "method": qc["method"], "suspectVotes": int(suspect_votes.loc[i]),
+                                 "votersUsed": int(voted.loc[i])},
                     "evidence": {key: _clean(r[col]) for col, key in EVIDENCE.items() if col in r},
                 })
         scores = pd.Series([q["ensemble"]["score"] for q in qs], dtype=float)
@@ -176,7 +199,7 @@ class DetectionEngine:
             "questions": qs,
             "questionSummary": {
                 "top3MeanScore": None if scores.empty else round(float(scores.nlargest(3).mean()), 4),
-                "suspectQuestions": int((scores >= qc["threshold"]).sum()),
+                "suspectQuestions": sum(q["ensemble"]["decision"] == "suspect" for q in qs),
                 "totalQuestions": len(qs),
             },
             "notes": [self.config["prior_note"],

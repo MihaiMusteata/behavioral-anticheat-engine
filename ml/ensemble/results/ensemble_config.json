@@ -20,22 +20,21 @@
     "strict_target_fpr": 0.05
   },
   "question": {
-    "method": "soft_mean",
+    "method": "majority",
     "voters": [
       "01_catboost",
-      "02_tabpfn",
       "03_logistic_regression",
       "05_isolation_forest"
     ],
     "weights": {
-      "01_catboost": 0.25,
-      "02_tabpfn": 0.25,
-      "03_logistic_regression": 0.25,
-      "05_isolation_forest": 0.25
+      "01_catboost": 0.333333,
+      "03_logistic_regression": 0.333333,
+      "05_isolation_forest": 0.333333
     },
     "threshold": 0.5,
-    "strict_threshold": 0.423968,
+    "strict_threshold": 0.539143,
     "strict_target_fpr": 0.05,
+    "decision": "majority of the voters that voted (2 of 3)",
     "session_aggregation": "top3_mean"
   },
   "abstention": "weights renormalised over the voters that returned a value",

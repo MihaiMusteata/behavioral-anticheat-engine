@@ -17,8 +17,9 @@ Methods compared (all on the same folds as the voters, no leakage):
                  cross-fitted like the weights (risk: overfits on 310 rows)
 plus a leave-one-voter-out run of soft_weighted (what each voter adds).
 
-Question level uses soft_mean (pre-declared): there are no reliable question
-labels to fit weights on.
+Question level: majority vote of 3 voters decides (2 of 3), the plain mean of
+their probabilities is the score (no reliable question labels to fit weights
+on). Evaluated: soft_mean (score) and hard_majority (share of suspect votes).
 
 Thresholds: 0.5 ("suspect") and a strict one = 95th percentile of the
 ensemble score on natural sessions (target <= 5% false accusations; the
@@ -54,9 +55,12 @@ RESULTS = ENSEMBLE_DIR / "results"
 ARTIFACTS = ENSEMBLE_DIR / "artifacts"
 
 SESSION_VOTERS = ["01_catboost", "02_tabpfn", "03_logistic_regression", "04_minirocket", "05_isolation_forest"]
-QUESTION_VOTERS = ["01_catboost", "02_tabpfn", "03_logistic_regression", "05_isolation_forest"]
+# 3 voters at question level - an odd number, so the majority vote never ties
+# (2 of 3). TabPFN is left out here: ~33 s per call and GBs of RAM at 4,258
+# context rows on CPU (it keeps its vote at session level).
+QUESTION_VOTERS = ["01_catboost", "03_logistic_regression", "05_isolation_forest"]
 FINAL_SESSION_METHOD = "soft_weighted"
-FINAL_QUESTION_METHOD = "soft_mean"
+FINAL_QUESTION_METHOD = "majority"   # decision: 2 of 3 votes; score: mean probability
 STRICT_FPR = 0.05
 SCHEMES = ("logo", "lotto")
 
@@ -157,7 +161,7 @@ def main() -> None:
             summary[(scheme, f"without {left_out}")] = m
 
         qwide = load_oof(QUESTION_VOTERS, scheme, "question")
-        for method in ("soft_mean", "soft_weighted"):
+        for method in ("soft_mean", "hard_majority"):
             oof, m = evaluate(qwide, cross_fitted(qwide, QUESTION_VOTERS, method))
             agg = {how: compute_metrics(aggregate_to_sessions(oof, how)) for how in ("top3_mean", "max", "mean")}
             save(f"question_{method}", scheme, oof, m,
@@ -165,8 +169,8 @@ def main() -> None:
                   "aggregated_to_session": agg})
             summary[(scheme, f"question {method}")] = m
             summary[(scheme, f"question {method} -> session top3")] = agg["top3_mean"]
-            if method == FINAL_QUESTION_METHOD:
-                print_summary("ENSEMBLE question soft_mean -> session (top3_mean)", scheme, agg["top3_mean"])
+            if method == "soft_mean":
+                print_summary("ENSEMBLE question (3 voters, mean) -> session (top3_mean)", scheme, agg["top3_mean"])
 
     print("\n=== ROC-AUC overview (logo / lotto)")
     for name in dict.fromkeys(k[1] for k in summary):
@@ -193,8 +197,10 @@ def main() -> None:
             "method": FINAL_QUESTION_METHOD, "voters": QUESTION_VOTERS,
             "weights": {k: round(v, 6) for k, v in q_weights.items()},
             "threshold": 0.5,
-            "strict_threshold": round(strict_threshold(q_score, qwide["label"]), 6),
+            # never below the decision threshold, so "high" always means suspect
+            "strict_threshold": round(max(strict_threshold(q_score, qwide["label"]), 0.5), 6),
             "strict_target_fpr": STRICT_FPR,
+            "decision": "majority of the voters that voted (2 of 3)",
             "session_aggregation": "top3_mean",
         },
         "abstention": "weights renormalised over the voters that returned a value",

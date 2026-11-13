@@ -166,13 +166,13 @@ def question_to_session_entries(scheme: str) -> list[tuple[str, dict | None]]:
         m = read(MODELS_DIR / key / "results" / f"question_to_session_metrics_{scheme}.json")
         rows.append((f"{label} pe întrebări → sesiune", m["aggregations"]["top3_mean"] if m else None))
     e = read(ENSEMBLE_RESULTS / f"question_soft_mean_metrics_{scheme}.json")
-    rows.append(("Ansamblu pe întrebări → sesiune (FINAL)", e["aggregated_to_session"]["top3_mean"] if e else None))
+    rows.append(("Ansamblu pe întrebări (3 votanți, media) → sesiune", e["aggregated_to_session"]["top3_mean"] if e else None))
     return rows
 
 
 def question_entries(scheme: str) -> list[tuple[str, dict | None]]:
     rows = [(label, read(MODELS_DIR / key / "results" / f"question_metrics_{scheme}.json")) for key, label in VOTERS]
-    rows.append(("Ansamblu pe întrebări: soft voting egal (FINAL)",
+    rows.append(("Ansamblu pe întrebări (3 votanți, media)",
                  read(ENSEMBLE_RESULTS / f"question_soft_mean_metrics_{scheme}.json")))
     return rows
 
