@@ -171,6 +171,74 @@ namespace BehavioralAnticheatEngine.Infrastructure.Persistence.Migrations
                     b.ToTable("scoring_rules", (string)null);
                 });
 
+            modelBuilder.Entity("BehavioralAnticheatEngine.Domain.Behavior.SessionDetection", b =>
+                {
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Decision")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("ExamScheduleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Level")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Method")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ModelsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("QuestionSummaryJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("QuestionsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset>("RequestedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double?>("Score")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTimeOffset?>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int?>("VotersUsed")
+                        .HasColumnType("integer");
+
+                    b.HasKey("SessionId");
+
+                    b.HasIndex("ExamScheduleId");
+
+                    b.HasIndex("Status", "RequestedAtUtc");
+
+                    b.ToTable("session_detections", (string)null);
+                });
+
             modelBuilder.Entity("BehavioralAnticheatEngine.Domain.Behavior.SessionFeatureAggregate", b =>
                 {
                     b.Property<Guid>("Id")
@@ -617,6 +685,15 @@ namespace BehavioralAnticheatEngine.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("BehavioralAnticheatEngine.Domain.Behavior.SessionDetection", b =>
+                {
+                    b.HasOne("BehavioralAnticheatEngine.Domain.Exams.ExamSession", null)
+                        .WithOne()
+                        .HasForeignKey("BehavioralAnticheatEngine.Domain.Behavior.SessionDetection", "SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("BehavioralAnticheatEngine.Domain.Exams.ExamSchedule", b =>

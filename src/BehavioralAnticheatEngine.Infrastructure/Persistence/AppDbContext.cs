@@ -35,6 +35,8 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
 
     public DbSet<SessionFeatureAggregate> SessionFeatureAggregates => Set<SessionFeatureAggregate>();
 
+    public DbSet<SessionDetection> SessionDetections => Set<SessionDetection>();
+
     public DbSet<RiskScoreSnapshot> RiskScoreSnapshots => Set<RiskScoreSnapshot>();
 
     public DbSet<ScoringRule> ScoringRules => Set<ScoringRule>();

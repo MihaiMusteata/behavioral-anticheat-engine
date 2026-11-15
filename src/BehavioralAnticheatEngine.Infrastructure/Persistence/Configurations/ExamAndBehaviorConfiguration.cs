@@ -178,6 +178,30 @@ public sealed class SessionFeatureAggregateConfiguration : IEntityTypeConfigurat
     }
 }
 
+public sealed class SessionDetectionConfiguration : IEntityTypeConfiguration<SessionDetection>
+{
+    public void Configure(EntityTypeBuilder<SessionDetection> builder)
+    {
+        builder.ToTable("session_detections");
+        builder.HasKey(detection => detection.SessionId);
+        builder.Property(detection => detection.SessionId).ValueGeneratedNever();
+        builder.Property(detection => detection.Status).HasMaxLength(32).IsRequired();
+        builder.Property(detection => detection.Decision).HasMaxLength(32);
+        builder.Property(detection => detection.Level).HasMaxLength(32);
+        builder.Property(detection => detection.Method).HasMaxLength(64);
+        builder.Property(detection => detection.ModelsJson).HasColumnType("jsonb").IsRequired();
+        builder.Property(detection => detection.QuestionsJson).HasColumnType("jsonb").IsRequired();
+        builder.Property(detection => detection.QuestionSummaryJson).HasColumnType("jsonb").IsRequired();
+        builder.Property(detection => detection.Error).HasMaxLength(1000);
+        builder.HasIndex(detection => detection.ExamScheduleId);
+        builder.HasIndex(detection => new { detection.Status, detection.RequestedAtUtc });
+        builder.HasOne<ExamSession>()
+            .WithOne()
+            .HasForeignKey<SessionDetection>(detection => detection.SessionId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 public sealed class RiskScoreSnapshotConfiguration : IEntityTypeConfiguration<RiskScoreSnapshot>
 {
     public void Configure(EntityTypeBuilder<RiskScoreSnapshot> builder)

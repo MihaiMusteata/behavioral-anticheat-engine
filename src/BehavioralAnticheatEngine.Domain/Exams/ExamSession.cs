@@ -49,6 +49,9 @@ public sealed class ExamSession
 
     public DateTimeOffset ConsentAcceptedAtUtc { get; private set; }
 
+    // Legacy rule-based score (weighted event counts), no longer computed -
+    // suspicion now comes from the AI ensemble (Behavior/SessionDetection).
+    // Kept so historical sessions keep their value for the thesis baseline.
     public double CurrentRiskScore { get; private set; }
 
     public int SequenceGapWarnings { get; private set; }
@@ -108,11 +111,6 @@ public sealed class ExamSession
         Status = ExamSessionStatuses.Submitted;
         SubmittedAtUtc = submittedAtUtc;
         LastActivityAtUtc = submittedAtUtc;
-    }
-
-    public void UpdateRisk(double riskScore)
-    {
-        CurrentRiskScore = Math.Clamp(riskScore, 0, 100);
     }
 
     public void RecordSequenceGap()
