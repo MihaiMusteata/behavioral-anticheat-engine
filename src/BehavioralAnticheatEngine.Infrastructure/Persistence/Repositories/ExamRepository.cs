@@ -182,4 +182,13 @@ public sealed class ExamRepository : IExamRepository
     {
         await _dbContext.CalibrationSamples.AddAsync(sample, cancellationToken);
     }
+
+    public Task<List<CalibrationSample>> ListCalibrationSamplesForSessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        return _dbContext.CalibrationSamples
+            .AsNoTracking()
+            .Where(sample => sample.SessionId == sessionId)
+            .OrderBy(sample => sample.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+    }
 }
