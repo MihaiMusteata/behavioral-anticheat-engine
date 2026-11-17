@@ -16,7 +16,9 @@
   <ItemGroup>
     <Compile Include="DependencyInjection.cs" />
     <Compile Include="Messaging/KafkaBehavioralEventPublisher.cs" />
+    <Compile Include="Messaging/KafkaDetectionQueue.cs" />
     <Compile Include="Messaging/KafkaOptions.cs" />
+    <Compile Include="Ml/MlDetectionHttpClient.cs" />
     <Compile Include="Observability/KafkaActivitySource.cs" />
     <Compile Include="Observability/KafkaTraceContextPropagator.cs" />
     <Compile Include="Observability/ObservabilityExtensions.cs" />
@@ -45,8 +47,11 @@
     <Compile Include="Persistence/Migrations/20261015115104_MakeGuestPasswordHashNullable.cs" />
     <Compile Include="Persistence/Migrations/20261028070205_AddCalibrationSamples.Designer.cs" />
     <Compile Include="Persistence/Migrations/20261028070205_AddCalibrationSamples.cs" />
+    <Compile Include="Persistence/Migrations/20261109093010_AddSessionDetections.Designer.cs" />
+    <Compile Include="Persistence/Migrations/20261109093010_AddSessionDetections.cs" />
     <Compile Include="Persistence/Migrations/AppDbContextModelSnapshot.cs" />
     <Compile Include="Persistence/Repositories/BehavioralEventRepository.cs" />
+    <Compile Include="Persistence/Repositories/DetectionRepository.cs" />
     <Compile Include="Persistence/Repositories/ExamRepository.cs" />
     <Compile Include="Persistence/Repositories/OutboxRepository.cs" />
     <Compile Include="Persistence/Repositories/RefreshTokenRepository.cs" />
@@ -63,6 +68,8 @@
     <Compile Include="Security/Pbkdf2PasswordHasher.cs" />
     <Compile Include="Workers/BehavioralEventConsumerHostedService.cs" />
     <Compile Include="Workers/BehavioralEventSilenceMonitorHostedService.cs" />
+    <Compile Include="Workers/DetectionConsumerHostedService.cs" />
+    <Compile Include="Workers/DetectionRecoveryHostedService.cs" />
   </ItemGroup>
 
   <ItemGroup>

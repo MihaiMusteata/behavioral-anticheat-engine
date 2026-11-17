@@ -171,6 +171,9 @@ services:
       Jwt__RefreshToken__SigningKey: ${JWT_REFRESH_SIGNING_KEY:-development-refresh-token-signing-key-change-before-production}
       OpenTelemetry__OtlpEndpoint: http://otel-lgtm:4317
       OpenTelemetry__Environment: production
+      MlService__BaseUrl: http://ml:8000
+      Detection__SettleSeconds: "15"
+      Detection__MaxBatchSize: "25"
     depends_on:
       pgbouncer:
         condition: service_started
@@ -180,6 +183,19 @@ services:
         condition: service_started
       otel-lgtm:
         condition: service_started
+      ml:
+        condition: service_healthy   # models load ~1-2 min (TabPFN cache)
+
+  # AI detection service. Limits keep it from starving the exam platform on
+  # the 4-core / 8 GB server: TabPFN at question level stays off (~6 GB RAM
+  # for a full exam), the session-level vote keeps all 5 voters.
+  ml:
+    image: bae-ml:prod
+    restart: unless-stopped
+    environment:
+      ML_SKIP_VOTERS: "question:02_tabpfn"
+    mem_limit: 2500m
+    cpus: 1.5
 
   client:
     image: bae-client:prod
