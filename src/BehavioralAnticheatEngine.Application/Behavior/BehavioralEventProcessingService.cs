@@ -14,7 +14,6 @@ public sealed class BehavioralEventProcessingService : IBehavioralEventProcessin
     private readonly IExamRepository _exams;
     private readonly IUserRepository _users;
     private readonly IBehavioralEventProcessorRegistry _processors;
-    private readonly IRiskScoringService _riskScoring;
     private readonly ILiveExamStateStore _liveState;
     private readonly IDashboardEventBus _dashboardEvents;
     private readonly IUnitOfWork _unitOfWork;
@@ -25,7 +24,6 @@ public sealed class BehavioralEventProcessingService : IBehavioralEventProcessin
         IExamRepository exams,
         IUserRepository users,
         IBehavioralEventProcessorRegistry processors,
-        IRiskScoringService riskScoring,
         ILiveExamStateStore liveState,
         IDashboardEventBus dashboardEvents,
         IUnitOfWork unitOfWork,
@@ -35,7 +33,6 @@ public sealed class BehavioralEventProcessingService : IBehavioralEventProcessin
         _exams = exams;
         _users = users;
         _processors = processors;
-        _riskScoring = riskScoring;
         _liveState = liveState;
         _dashboardEvents = dashboardEvents;
         _unitOfWork = unitOfWork;
@@ -79,17 +76,10 @@ public sealed class BehavioralEventProcessingService : IBehavioralEventProcessin
         var processor = _processors.Resolve(behavioralEvent.EventType);
         await processor.ProcessAsync(eventRecord, aggregate, cancellationToken);
 
-        var score = await _riskScoring.ScoreAsync(aggregate, cancellationToken);
-        aggregate.SetRiskScore(score.Score, _timeProvider.GetUtcNow());
-        await _events.AddRiskSnapshotAsync(
-            RiskScoreSnapshot.Create(
-                behavioralEvent.SessionId,
-                behavioralEvent.ExamScheduleId,
-                behavioralEvent.StudentId,
-                score.Score,
-                score.Reason,
-                _timeProvider.GetUtcNow()),
-            cancellationToken);
+        // Suspicion is no longer computed per event from weighted rules: the
+        // AI voting ensemble scores the whole session once it is submitted
+        // (Application/Detection). Events only feed the audit trail and the
+        // live counters here.
 
         var session = await _exams.GetSessionAsync(behavioralEvent.SessionId, cancellationToken);
         if (session is not null)
@@ -100,7 +90,6 @@ public sealed class BehavioralEventProcessingService : IBehavioralEventProcessin
                 session.MarkActivity(behavioralEvent.ReceivedAtUtc);
             }
 
-            session.UpdateRisk(score.Score);
             if (HasValidationFlag(behavioralEvent.ValidationFlags, "seq_gap"))
             {
                 session.RecordSequenceGap();
@@ -116,7 +105,6 @@ public sealed class BehavioralEventProcessingService : IBehavioralEventProcessin
             behavioralEvent.StudentId,
             session?.ParticipantName ?? student?.Email ?? string.Empty,
             session?.Status ?? string.Empty,
-            score.Score,
             aggregate.TotalEvents,
             session?.LastActivityAtUtc ?? behavioralEvent.TimestampUtc,
             behavioralEvent.EventType);
