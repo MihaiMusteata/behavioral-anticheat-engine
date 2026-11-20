@@ -1,3 +1,5 @@
+using BehavioralAnticheatEngine.Application.Detection;
+
 namespace BehavioralAnticheatEngine.Application.Dashboard.Contracts;
 
 public sealed record ExamDashboardDto(
@@ -14,11 +16,14 @@ public sealed record DashboardSessionRowDto(
     string Status,
     DateTimeOffset StartedAtUtc,
     DateTimeOffset LastActivityAtUtc,
-    double RiskScore,
+    SessionDetectionSummaryDto Detection,
     int TotalEvents,
     string LiveStatus);
 
-public sealed record RiskDistributionDto(int Low, int Medium, int High);
+// Low / Medium / High come from the AI ensemble level of completed
+// detections; Processing = submitted and not scored yet (or retrying);
+// Waiting = not submitted yet.
+public sealed record RiskDistributionDto(int Low, int Medium, int High, int Processing, int Waiting);
 
 public sealed record EventFrequencyDto(string EventType, int Count);
 
@@ -27,14 +32,12 @@ public sealed record SessionTimelineDto(
     Guid StudentId,
     string StudentEmail,
     string Status,
-    double RiskScore,
+    SessionDetectionSummaryDto Detection,
     bool? SelfReportedCheated,
     Guid? SelectedQuestionId,
-    double? SelectedQuestionRiskScore,
     IReadOnlyCollection<TimelineQuestionDto> Questions,
     IReadOnlyCollection<AnswerReviewDto> Answers,
-    IReadOnlyCollection<TimelineEventDto> Events,
-    IReadOnlyCollection<RiskSnapshotDto> RiskSnapshots);
+    IReadOnlyCollection<TimelineEventDto> Events);
 
 public sealed record SessionTimelineExportDto(
     string FileName,
@@ -60,14 +63,12 @@ public sealed record TimelineEventDto(
     string PayloadJson,
     string ValidationFlags);
 
-public sealed record RiskSnapshotDto(double Score, string Reason, DateTimeOffset CreatedAtUtc);
-
 public sealed record TimelineQuestionDto(
     Guid QuestionId,
     int OrderIndex,
     string Label,
     string Prompt,
-    double RiskScore,
+    QuestionDetectionDto? Detection,
     IReadOnlyCollection<TimelineQuestionOptionDto> Options);
 
 public sealed record TimelineQuestionOptionDto(Guid OptionId, string Label);
@@ -78,7 +79,6 @@ public sealed record LiveSessionState(
     Guid StudentId,
     string StudentEmail,
     string Status,
-    double RiskScore,
     int TotalEvents,
     DateTimeOffset LastActivityAtUtc,
     string LastEventType);
