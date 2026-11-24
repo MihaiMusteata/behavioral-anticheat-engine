@@ -2,7 +2,9 @@ using BehavioralAnticheatEngine.Application.Auth;
 using BehavioralAnticheatEngine.Application.Behavior.Contracts;
 using BehavioralAnticheatEngine.Application.Common.Interfaces;
 using BehavioralAnticheatEngine.Application.Common.Security;
+using BehavioralAnticheatEngine.Application.Detection;
 using BehavioralAnticheatEngine.Infrastructure.Messaging;
+using BehavioralAnticheatEngine.Infrastructure.Ml;
 using BehavioralAnticheatEngine.Infrastructure.Persistence;
 using BehavioralAnticheatEngine.Infrastructure.Persistence.Repositories;
 using BehavioralAnticheatEngine.Infrastructure.Redis;
@@ -35,6 +37,8 @@ public static class DependencyInjection
         services.Configure<SecureActionOptions>(configuration.GetSection(SecureActionOptions.SectionName));
         services.Configure<RedisOptions>(configuration.GetSection(RedisOptions.SectionName));
         services.Configure<KafkaOptions>(configuration.GetSection(KafkaOptions.SectionName));
+        services.Configure<MlServiceOptions>(configuration.GetSection(MlServiceOptions.SectionName));
+        services.Configure<DetectionOptions>(configuration.GetSection(DetectionOptions.SectionName));
 
         services.AddSingleton(TimeProvider.System);
         services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
@@ -49,6 +53,7 @@ public static class DependencyInjection
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IExamRepository, ExamRepository>();
         services.AddScoped<IBehavioralEventRepository, BehavioralEventRepository>();
+        services.AddScoped<IDetectionRepository, DetectionRepository>();
         services.AddScoped<IOutboxRepository, OutboxRepository>();
         services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
@@ -60,6 +65,8 @@ public static class DependencyInjection
         services.AddScoped<ILiveExamStateStore, RedisLiveExamStateStore>();
         services.AddSingleton<IDashboardEventBus, RedisDashboardEventBus>();
         services.AddSingleton<IBehavioralEventPublisher, KafkaBehavioralEventPublisher>();
+        services.AddSingleton<IDetectionQueue, KafkaDetectionQueue>();
+        services.AddSingleton<IMlDetectionClient, MlDetectionHttpClient>();
 
         return services;
     }
@@ -68,6 +75,8 @@ public static class DependencyInjection
     {
         services.AddHostedService<BehavioralEventConsumerHostedService>();
         services.AddHostedService<BehavioralEventSilenceMonitorHostedService>();
+        services.AddHostedService<DetectionConsumerHostedService>();
+        services.AddHostedService<DetectionRecoveryHostedService>();
 
         return services;
     }

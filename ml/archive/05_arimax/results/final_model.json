@@ -1,0 +1,9 @@
+{
+  "model": "05_arimax",
+  "level": "session",
+  "trained_on_rows": 310,
+  "trained_on_sessions": 310,
+  "predicts_rows": 301,
+  "file": "artifacts/model.joblib",
+  "roundtrip_check": "passed"
+}

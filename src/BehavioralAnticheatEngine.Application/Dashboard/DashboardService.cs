@@ -1,8 +1,8 @@
 using System.Text;
 using BehavioralAnticheatEngine.Application.Common.Exceptions;
 using BehavioralAnticheatEngine.Application.Common.Interfaces;
-using BehavioralAnticheatEngine.Application.Behavior;
 using BehavioralAnticheatEngine.Application.Dashboard.Contracts;
+using BehavioralAnticheatEngine.Application.Detection;
 using BehavioralAnticheatEngine.Domain.Behavior;
 using BehavioralAnticheatEngine.Domain.Exams;
 
@@ -13,20 +13,20 @@ public sealed class DashboardService : IDashboardService
     private readonly IExamRepository _exams;
     private readonly IBehavioralEventRepository _events;
     private readonly ILiveExamStateStore _liveState;
-    private readonly IRiskScoringService _riskScoring;
+    private readonly IDetectionRepository _detections;
     private readonly TimeProvider _timeProvider;
 
     public DashboardService(
         IExamRepository exams,
         IBehavioralEventRepository events,
         ILiveExamStateStore liveState,
-        IRiskScoringService riskScoring,
+        IDetectionRepository detections,
         TimeProvider timeProvider)
     {
         _exams = exams;
         _events = events;
         _liveState = liveState;
-        _riskScoring = riskScoring;
+        _detections = detections;
         _timeProvider = timeProvider;
     }
 
@@ -37,6 +37,8 @@ public sealed class DashboardService : IDashboardService
         var sessions = await _exams.ListSessionsForExamAsync(examScheduleId, cancellationToken);
         var liveStates = (await _liveState.ListByExamAsync(examScheduleId, cancellationToken))
             .ToDictionary(state => state.SessionId);
+        var detections = (await _detections.ListForSessionsAsync(sessions.Select(session => session.Id).ToArray(), cancellationToken))
+            .ToDictionary(detection => detection.SessionId);
 
         var rows = new List<DashboardSessionRowDto>(sessions.Count);
         var eventFrequencies = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -44,6 +46,7 @@ public sealed class DashboardService : IDashboardService
         {
             var events = await _events.ListEventsForSessionAsync(session.Id, cancellationToken);
             liveStates.TryGetValue(session.Id, out var live);
+            detections.TryGetValue(session.Id, out var detection);
 
             rows.Add(new DashboardSessionRowDto(
                 session.Id,
@@ -52,7 +55,7 @@ public sealed class DashboardService : IDashboardService
                 session.Status,
                 session.StartedAtUtc,
                 live?.LastActivityAtUtc ?? session.LastActivityAtUtc,
-                live?.RiskScore ?? session.CurrentRiskScore,
+                DetectionMapper.ToSummary(detection, session.Status),
                 live?.TotalEvents ?? events.Count,
                 ResolveLiveStatus(session, live)));
 
@@ -64,15 +67,20 @@ public sealed class DashboardService : IDashboardService
             }
         }
 
+        var completed = rows.Where(row => row.Detection.Status == SessionDetectionStatuses.Completed).ToArray();
         var riskDistribution = new RiskDistributionDto(
-            rows.Count(row => row.RiskScore < 35),
-            rows.Count(row => row.RiskScore >= 35 && row.RiskScore < 70),
-            rows.Count(row => row.RiskScore >= 70));
+            completed.Count(row => row.Detection.Level is not ("medium" or "high")),
+            completed.Count(row => row.Detection.Level == "medium"),
+            completed.Count(row => row.Detection.Level == "high"),
+            rows.Count(row => row.Detection.Status is SessionDetectionStatuses.Processing or SessionDetectionStatuses.Failed),
+            rows.Count(row => row.Detection.Status == DetectionDisplayStatuses.Waiting));
 
         return new ExamDashboardDto(
             schedule.Id,
             schedule.Name,
-            rows.OrderByDescending(row => row.RiskScore).ThenBy(row => row.StudentEmail).ToArray(),
+            rows.OrderByDescending(row => row.Detection.Score ?? -1)
+                .ThenBy(row => row.StudentEmail)
+                .ToArray(),
             riskDistribution,
             eventFrequencies
                 .OrderByDescending(pair => pair.Value)
@@ -88,31 +96,24 @@ public sealed class DashboardService : IDashboardService
         var events = questionId is null
             ? allEvents
             : FilterEventsForQuestion(allEvents, questionId.Value).ToList();
-        var snapshots = await _events.ListRiskSnapshotsForSessionAsync(sessionId, cancellationToken);
+        var detection = await _detections.GetAsync(sessionId, cancellationToken);
+        var questionDetections = DetectionMapper.ParseQuestions(detection);
         var answers = await _exams.ListAnswersForSessionAsync(sessionId, cancellationToken);
         var questions = session.Assessment?.Questions.OrderBy(question => question.OrderIndex).ToArray() ?? Array.Empty<Question>();
         var questionDtos = new List<TimelineQuestionDto>(questions.Length);
         foreach (var question in questions)
         {
-            var questionEvents = FilterEventsForQuestion(allEvents, question.Id);
-            var questionScore = await _riskScoring.ScoreEventsAsync(questionEvents.Select(behavioralEvent => behavioralEvent.EventType), cancellationToken);
+            questionDetections.TryGetValue(question.Id, out var questionDetection);
             questionDtos.Add(new TimelineQuestionDto(
                 question.Id,
                 question.OrderIndex,
                 $"Question {question.OrderIndex}",
                 question.Prompt,
-                questionScore.Score,
+                questionDetection,
                 question.Options
                     .OrderBy(option => option.OrderIndex)
                     .Select(option => new TimelineQuestionOptionDto(option.Id, option.Label))
                     .ToArray()));
-        }
-
-        double? selectedQuestionRiskScore = null;
-        if (questionId is not null)
-        {
-            var selectedScore = await _riskScoring.ScoreEventsAsync(events.Select(behavioralEvent => behavioralEvent.EventType), cancellationToken);
-            selectedQuestionRiskScore = selectedScore.Score;
         }
 
         return new SessionTimelineDto(
@@ -120,10 +121,9 @@ public sealed class DashboardService : IDashboardService
             session.StudentId,
             session.ParticipantName,
             session.Status,
-            session.CurrentRiskScore,
+            DetectionMapper.ToSummary(detection, session.Status),
             session.SelfReportedCheated,
             questionId,
-            selectedQuestionRiskScore,
             questionDtos,
             answers.Select(answer =>
             {
@@ -150,10 +150,6 @@ public sealed class DashboardService : IDashboardService
                     behavioralEvent.EventType,
                     behavioralEvent.PayloadJson,
                     behavioralEvent.ValidationFlags))
-                .ToArray(),
-            snapshots
-                .OrderBy(snapshot => snapshot.CreatedAtUtc)
-                .Select(snapshot => new RiskSnapshotDto(snapshot.Score, snapshot.Reason, snapshot.CreatedAtUtc))
                 .ToArray());
     }
 

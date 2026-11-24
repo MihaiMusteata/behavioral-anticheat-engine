@@ -13,10 +13,4 @@ public interface IBehavioralEventRepository
     Task<SessionFeatureAggregate?> GetFeatureAggregateAsync(Guid sessionId, CancellationToken cancellationToken = default);
 
     Task AddFeatureAggregateAsync(SessionFeatureAggregate aggregate, CancellationToken cancellationToken = default);
-
-    Task AddRiskSnapshotAsync(RiskScoreSnapshot snapshot, CancellationToken cancellationToken = default);
-
-    Task<List<RiskScoreSnapshot>> ListRiskSnapshotsForSessionAsync(Guid sessionId, CancellationToken cancellationToken = default);
-
-    Task<List<ScoringRule>> ListScoringRulesAsync(CancellationToken cancellationToken = default);
 }

@@ -71,3 +71,19 @@ dev-history-commits.sh
 *.sln
 *.sw?
 october-history-commits.sh
+
+# Trained models and out-of-fold predictions: they embed or reference student
+# sessions (TabPFN keeps its whole training set as context), so they stay local
+# like the datasets. Aggregate metrics in */results/ are tracked.
+ml/**/artifacts/
+# Local backdating scripts (run by hand, never committed)
+*-history-commits.sh
+
+# Backups pulled from the production VPS (DB dump with student data + secrets)
+server-backup/
+
+# Thesis-only material, not part of the system: exploratory analysis (EDA)
+# and the figures generated for the thesis text
+ml/eda/
+ml/evaluation/figures/
+ml/evaluation/figures.py

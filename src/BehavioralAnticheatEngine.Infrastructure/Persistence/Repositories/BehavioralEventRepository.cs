@@ -46,27 +46,4 @@ public sealed class BehavioralEventRepository : IBehavioralEventRepository
     {
         await _dbContext.SessionFeatureAggregates.AddAsync(aggregate, cancellationToken);
     }
-
-    public async Task AddRiskSnapshotAsync(RiskScoreSnapshot snapshot, CancellationToken cancellationToken = default)
-    {
-        await _dbContext.RiskScoreSnapshots.AddAsync(snapshot, cancellationToken);
-    }
-
-    public Task<List<RiskScoreSnapshot>> ListRiskSnapshotsForSessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
-    {
-        return _dbContext.RiskScoreSnapshots
-            .AsNoTracking()
-            .Where(snapshot => snapshot.SessionId == sessionId)
-            .OrderBy(snapshot => snapshot.CreatedAtUtc)
-            .ToListAsync(cancellationToken);
-    }
-
-    public Task<List<ScoringRule>> ListScoringRulesAsync(CancellationToken cancellationToken = default)
-    {
-        return _dbContext.ScoringRules
-            .AsNoTracking()
-            .Where(rule => rule.IsEnabled)
-            .OrderBy(rule => rule.FeatureKey)
-            .ToListAsync(cancellationToken);
-    }
 }

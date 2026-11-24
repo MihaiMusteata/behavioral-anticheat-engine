@@ -3,6 +3,7 @@ using BehavioralAnticheatEngine.Application.Behavior;
 using BehavioralAnticheatEngine.Application.Common.Interfaces;
 using BehavioralAnticheatEngine.Application.Common.Mediation;
 using BehavioralAnticheatEngine.Application.Dashboard;
+using BehavioralAnticheatEngine.Application.Detection;
 using BehavioralAnticheatEngine.Application.Exams;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -19,7 +20,9 @@ public static class DependencyInjection
         services.AddScoped<IBehavioralIngestionService, BehavioralIngestionService>();
         services.AddScoped<IBehavioralEventProcessingService, BehavioralEventProcessingService>();
         services.AddScoped<IDashboardService, DashboardService>();
-        services.AddScoped<IRiskScoringService, RuleBasedRiskScoringService>();
+        services.AddScoped<IDetectionRequestService, DetectionRequestService>();
+        services.AddScoped<IDetectionProcessingService, DetectionProcessingService>();
+        services.AddScoped<DetectionPayloadBuilder>();
         services.AddScoped<IBehavioralEventProcessorRegistry, BehavioralEventProcessorRegistry>();
 
         foreach (var processorType in Assembly.GetExecutingAssembly()

@@ -1,0 +1,7 @@
+[
+  "log_clean_ratio",
+  "log_p90_ratio",
+  "share_samples_gt2",
+  "share_samples_gt3",
+  "share_chars_gt3"
+]

@@ -6,3 +6,16 @@
 client/node_modules
 client/dist
 **/.DS_Store
+# ML: the local virtualenv (~2 GB) and caches never go into an image.
+ml/.venv
+**/__pycache__
+**/*.pyc
+# Exported data stays out of every build context; only the question norms
+# are needed (by ml-service) at inference time.
+datasets/*
+!datasets/ml
+datasets/ml/*
+!datasets/ml/question_norms.json
+# Out-of-fold predictions and archived voters are evaluation-only.
+ml/**/artifacts/*oof*.csv
+ml/archive

@@ -1,0 +1,90 @@
+{
+  "model": "00_rule_based_score",
+  "level": "session",
+  "scheme": "logo",
+  "params": {
+    "source": "appsettings.json -> RiskScoring:Rules",
+    "transform": "score / 100 (fixed, not fitted)"
+  },
+  "coverage": 1.0,
+  "overall": {
+    "n": 310,
+    "positives": 155,
+    "roc_auc": 0.810426638917794,
+    "pr_auc": 0.7361908184230831,
+    "brier": 0.19773193548387094,
+    "accuracy@0.5": 0.7870967741935484,
+    "precision@0.5": 0.7329842931937173,
+    "recall@0.5": 0.9032258064516129,
+    "f1@0.5": 0.8092485549132948,
+    "false_positive_rate@0.5": 0.32903225806451614,
+    "recall@fpr<=0.05": 0.0,
+    "recall@fpr<=0.10": 0.0
+  },
+  "roc_auc_ci95_group_bootstrap": [
+    0.7465481255011894,
+    0.8869336502809754
+  ],
+  "pr_auc_ci95_group_bootstrap": [
+    0.3418770933045191,
+    0.9375815807417044
+  ],
+  "by_test": {
+    "APA": {
+      "n": 76,
+      "positives": 15,
+      "roc_auc": 0.8,
+      "pr_auc": 0.38879877903647,
+      "brier": 0.2601039473684211,
+      "accuracy@0.5": 0.7105263157894737,
+      "precision@0.5": 0.3939393939393939,
+      "recall@0.5": 0.8666666666666667,
+      "f1@0.5": 0.5416666666666666,
+      "false_positive_rate@0.5": 0.32786885245901637,
+      "recall@fpr<=0.05": 0.0,
+      "recall@fpr<=0.10": 0.0
+    },
+    "PC": {
+      "n": 56,
+      "positives": 31,
+      "roc_auc": 0.8651612903225807,
+      "pr_auc": 0.8442257887321108,
+      "brier": 0.13458392857142856,
+      "accuracy@0.5": 0.8571428571428571,
+      "precision@0.5": 0.8484848484848485,
+      "recall@0.5": 0.9032258064516129,
+      "f1@0.5": 0.875,
+      "false_positive_rate@0.5": 0.2,
+      "recall@fpr<=0.05": 0.0,
+      "recall@fpr<=0.10": 0.0
+    },
+    "POO": {
+      "n": 56,
+      "positives": 40,
+      "roc_auc": 0.88203125,
+      "pr_auc": 0.9240884649737726,
+      "brier": 0.12659642857142855,
+      "accuracy@0.5": 0.8214285714285714,
+      "precision@0.5": 0.8947368421052632,
+      "recall@0.5": 0.85,
+      "f1@0.5": 0.8717948717948718,
+      "false_positive_rate@0.5": 0.25,
+      "recall@fpr<=0.05": 0.0,
+      "recall@fpr<=0.10": 0.0
+    },
+    "TPA": {
+      "n": 122,
+      "positives": 69,
+      "roc_auc": 0.7626469783975935,
+      "pr_auc": 0.7409870066378957,
+      "brier": 0.2205155737704918,
+      "accuracy@0.5": 0.7868852459016393,
+      "precision@0.5": 0.7471264367816092,
+      "recall@0.5": 0.9420289855072463,
+      "f1@0.5": 0.8333333333333334,
+      "false_positive_rate@0.5": 0.41509433962264153,
+      "recall@fpr<=0.05": 0.0,
+      "recall@fpr<=0.10": 0.0
+    }
+  }
+}

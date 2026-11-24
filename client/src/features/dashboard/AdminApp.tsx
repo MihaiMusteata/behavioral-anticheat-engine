@@ -9,7 +9,9 @@ import { Shell } from '../../shared/Shell'
 import { useLanguage } from '../../lib/i18n/language-context'
 import type { TranslationDictionary } from '../../lib/i18n/translations'
 import type { Assessment, AssessmentSummary, ExamSchedule, Question, QuestionType } from '../exams/types'
-import type { DashboardLiveEvent, DashboardSessionRow, ExamDashboard, SessionTimeline, TimelineEvent } from './types'
+import type { DashboardLiveEvent, DashboardSessionRow, ExamDashboard, SessionDetection, SessionTimeline, TimelineEvent } from './types'
+import { DetectionPanel, SuspicionCell } from './DetectionBadge'
+import { QuestionAuditList } from './QuestionAuditList'
 
 type Tab = 'tests' | 'exams' | 'dashboard'
 type QuestionForm = {
@@ -851,6 +853,16 @@ const DashboardPanel = forwardRef<DashboardPanelHandle, { exams: ExamSchedule[];
         return
       }
 
+      // The AI result is not part of the live state: when the Worker stores a
+      // detection, refetch the exam snapshot (and the open timeline).
+      if (event.type === 'detection.updated') {
+        queueDashboardRefresh()
+        if (selectedSessionIdRef.current === event.sessionId) {
+          queueTimelineRefresh(event.sessionId)
+        }
+        return
+      }
+
       const payload = parsePayload(event.payloadJson)
       const liveState = getLiveState(payload)
       const isKnownSession = dashboardSessionIdsRef.current.has(event.sessionId)
@@ -938,10 +950,12 @@ const DashboardPanel = forwardRef<DashboardPanelHandle, { exams: ExamSchedule[];
 
       {dashboard ? (
         <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <Metric label={t.admin.dashboard.lowRisk} value={dashboard.riskDistribution.low} tone="emerald" />
             <Metric label={t.admin.dashboard.mediumRisk} value={dashboard.riskDistribution.medium} tone="amber" />
             <Metric label={t.admin.dashboard.highRisk} value={dashboard.riskDistribution.high} tone="rose" />
+            <Metric label={t.admin.detection.processingMetric} value={dashboard.riskDistribution.processing} tone="sky" />
+            <Metric label={t.admin.detection.waitingMetric} value={dashboard.riskDistribution.waiting} tone="slate" />
           </div>
 
           <section className="rounded-lg border border-slate-300 bg-white">
@@ -969,7 +983,7 @@ const DashboardPanel = forwardRef<DashboardPanelHandle, { exams: ExamSchedule[];
                       </td>
                       <td className="px-4 py-3">{session.liveStatus}</td>
                       <td className="px-4 py-3">
-                        <RiskBar score={session.riskScore} />
+                        <SuspicionCell detection={session.detection} />
                       </td>
                       <td className="px-4 py-3">{session.totalEvents}</td>
                       <td className="px-4 py-3">{formatDate(session.lastActivityAtUtc)}</td>
@@ -1049,6 +1063,8 @@ const DashboardPanel = forwardRef<DashboardPanelHandle, { exams: ExamSchedule[];
   )
 })
 
+const BY_QUESTION_SCOPE = 'byQuestion'
+
 function SessionDetail({ timeline, onScored }: { timeline: SessionTimeline; onScored: () => void }) {
   const { t } = useLanguage()
   const [manualScores, setManualScores] = useState<Record<string, string>>({})
@@ -1057,7 +1073,21 @@ function SessionDetail({ timeline, onScored }: { timeline: SessionTimeline; onSc
   const chronologicalEvents = useMemo(() => sortTimelineEvents(timeline.events), [timeline.events])
 
   const activeTimeline = timeline
-  const selectedQuestion = auditScope === 'all' ? null : activeTimeline.questions.find((question) => question.questionId === auditScope) ?? null
+  // 'all' = every event, 'byQuestion' = question list, otherwise a question id
+  const groupedByQuestion = auditScope === BY_QUESTION_SCOPE
+  const selectedQuestion = auditScope === 'all' || groupedByQuestion
+    ? null
+    : activeTimeline.questions.find((question) => question.questionId === auditScope) ?? null
+  const questionAuditItems = useMemo(() => activeTimeline.questions.map((question) => ({
+    question,
+    eventCount: filterTimelineEventsForQuestion(chronologicalEvents, question.questionId).length,
+    answered: activeTimeline.answers.some((answer) => answer.questionId === question.questionId),
+  })), [activeTimeline.questions, activeTimeline.answers, chronologicalEvents])
+
+  function changeAuditScope(scope: string) {
+    setAuditScope(scope)
+    setSelectedEventTypes([])
+  }
   const scopedEvents = selectedQuestion
     ? filterTimelineEventsForQuestion(chronologicalEvents, selectedQuestion.questionId)
     : chronologicalEvents
@@ -1068,7 +1098,6 @@ function SessionDetail({ timeline, onScored }: { timeline: SessionTimeline; onSc
   const visibleAnswers = selectedQuestion
     ? activeTimeline.answers.filter((answer) => answer.questionId === selectedQuestion.questionId)
     : activeTimeline.answers
-  const activeRiskScore = selectedQuestion ? selectedQuestion.riskScore : activeTimeline.riskScore
 
   async function scoreAnswer(questionId: string) {
     const score = Number(manualScores[questionId] ?? '')
@@ -1107,7 +1136,7 @@ function SessionDetail({ timeline, onScored }: { timeline: SessionTimeline; onSc
       <section className="rounded-lg border border-slate-300 bg-white p-4">
         <h2 className="font-semibold">{activeTimeline.studentEmail}</h2>
         <p className="mb-3 text-sm text-slate-600">{activeTimeline.status}</p>
-        <RiskBar score={activeRiskScore} />
+        <DetectionPanel session={activeTimeline.detection} question={selectedQuestion ? selectedQuestion.detection : undefined} />
         <SelfReportBadge value={activeTimeline.selfReportedCheated} />
       </section>
 
@@ -1144,12 +1173,10 @@ function SessionDetail({ timeline, onScored }: { timeline: SessionTimeline; onSc
             <select
               className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm"
               value={auditScope}
-              onChange={(event) => {
-                setAuditScope(event.target.value)
-                setSelectedEventTypes([])
-              }}
+              onChange={(event) => changeAuditScope(event.target.value)}
             >
               <option value="all">{t.admin.sessionDetail.allSessionAudit}</option>
+              <option value={BY_QUESTION_SCOPE}>{t.admin.sessionDetail.groupedByQuestionAudit}</option>
               {activeTimeline.questions.map((question) => (
                 <option key={question.questionId} value={question.questionId}>{question.label}</option>
               ))}
@@ -1164,53 +1191,63 @@ function SessionDetail({ timeline, onScored }: { timeline: SessionTimeline; onSc
           ) : null}
         </div>
 
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h3 className="font-semibold">{t.admin.sessionDetail.activityTimelineHeading}</h3>
-            <p className="text-xs text-slate-500">{t.admin.sessionDetail.eventsCountLabel(visibleEvents.length, scopedEvents.length)}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void exportEvents()}
-              className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-2 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              <Icon icon="mdi:download" className="h-4 w-4" />
-              {t.admin.sessionDetail.exportCsvButton}
-            </button>
-          </div>
-        </div>
-
-        <div className="mb-3 flex max-h-24 flex-wrap gap-2 overflow-auto">
-          {eventTypes.map((eventType) => (
-            <label key={eventType} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700">
-              <input
-                type="checkbox"
-                checked={selectedEventTypes.includes(eventType)}
-                onChange={(event) => setSelectedEventTypes((current) => event.target.checked
-                  ? [...current, eventType]
-                  : current.filter((candidate) => candidate !== eventType))}
-              />
-              {getEventLabel(eventType, t)}
-            </label>
-          ))}
-        </div>
-
-        <div className="max-h-[520px] space-y-2 overflow-auto">
-          {visibleEvents.map((event) => (
-            <div key={event.id} className="rounded-md border border-slate-200 p-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="font-medium">{getEventLabel(event.eventType, t)}</p>
-                <span className="text-xs text-slate-500">#{event.seq}</span>
-              </div>
-              <p className="text-xs text-slate-500">{formatDate(getEventChronologyTimestamp(event))} {event.validationFlags ? `· ${event.validationFlags}` : ''}</p>
-              <p className="mt-1 text-sm text-slate-700">{getEventDetail(event, t)}</p>
-              {event.eventType === 'text_selected' ? (
-                <TextSelectionHighlight event={event} timeline={activeTimeline} />
-              ) : null}
+        {groupedByQuestion ? (
+          <QuestionAuditList
+            items={questionAuditItems}
+            sessionDetection={activeTimeline.detection}
+            onOpenQuestion={changeAuditScope}
+          />
+        ) : (
+          <>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="font-semibold">{t.admin.sessionDetail.activityTimelineHeading}</h3>
+              <p className="text-xs text-slate-500">{t.admin.sessionDetail.eventsCountLabel(visibleEvents.length, scopedEvents.length)}</p>
             </div>
-          ))}
-        </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void exportEvents()}
+                className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-2 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                <Icon icon="mdi:download" className="h-4 w-4" />
+                {t.admin.sessionDetail.exportCsvButton}
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-3 flex max-h-24 flex-wrap gap-2 overflow-auto">
+            {eventTypes.map((eventType) => (
+              <label key={eventType} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={selectedEventTypes.includes(eventType)}
+                  onChange={(event) => setSelectedEventTypes((current) => event.target.checked
+                    ? [...current, eventType]
+                    : current.filter((candidate) => candidate !== eventType))}
+                />
+                {getEventLabel(eventType, t)}
+              </label>
+            ))}
+          </div>
+
+          <div className="max-h-[520px] space-y-2 overflow-auto">
+            {visibleEvents.map((event) => (
+              <div key={event.id} className="rounded-md border border-slate-200 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-medium">{getEventLabel(event.eventType, t)}</p>
+                  <span className="text-xs text-slate-500">#{event.seq}</span>
+                </div>
+                <p className="text-xs text-slate-500">{formatDate(getEventChronologyTimestamp(event))} {event.validationFlags ? `· ${event.validationFlags}` : ''}</p>
+                <p className="mt-1 text-sm text-slate-700">{getEventDetail(event, t)}</p>
+                {event.eventType === 'text_selected' ? (
+                  <TextSelectionHighlight event={event} timeline={activeTimeline} />
+                ) : null}
+              </div>
+            ))}
+          </div>
+          </>
+        )}
       </section>
     </section>
   )
@@ -1225,24 +1262,6 @@ function CollapsibleSection({ title, children, defaultOpen = false }: { title: s
       </summary>
       <div className="border-t border-slate-200 p-4">{children}</div>
     </details>
-  )
-}
-
-function RiskBar({ score }: { score: number }) {
-  const { t } = useLanguage()
-  const normalized = Number.isFinite(score) ? Math.max(0, Math.min(Math.round(score), 100)) : 0
-  const tone = normalized >= 70 ? 'bg-rose-600' : normalized >= 35 ? 'bg-amber-500' : 'bg-emerald-600'
-
-  return (
-    <div className="min-w-40">
-      <div className="mb-1 flex items-center justify-between gap-2 text-xs font-semibold text-slate-700">
-        <span>{t.admin.riskBar.suspicion}</span>
-        <span>{normalized}%</span>
-      </div>
-      <div className="h-2 rounded bg-slate-200">
-        <div className={`h-2 rounded ${tone}`} style={{ width: `${normalized}%` }} />
-      </div>
-    </div>
   )
 }
 
@@ -1331,7 +1350,7 @@ function createLiveSessionRow(
     status,
     startedAtUtc: existing?.startedAtUtc ?? event.occurredAtUtc,
     lastActivityAtUtc: readString(liveState, 'lastActivityAtUtc') ?? existing?.lastActivityAtUtc ?? event.occurredAtUtc,
-    riskScore: readFiniteNumber(liveState, 'riskScore') ?? existing?.riskScore ?? 0,
+    detection: resolveLiveDetection(existing?.detection, status),
     totalEvents: Math.max(existing?.totalEvents ?? 0, reportedTotalEvents),
     liveStatus: getLiveStatusFromEvent(lastEventType, status, existing?.liveStatus ?? status),
   }
@@ -1362,7 +1381,6 @@ function mergeDashboardSnapshot(current: ExamDashboard | null, incoming: ExamDas
     return {
       ...fresh,
       status: live.status,
-      riskScore: live.riskScore,
       totalEvents: Math.max(live.totalEvents, fresh.totalEvents),
       lastActivityAtUtc: live.lastActivityAtUtc,
       liveStatus: live.liveStatus,
@@ -1382,18 +1400,52 @@ function isSessionStateNewer(candidate: DashboardSessionRow, reference: Dashboar
     parseTimestamp(candidate.lastActivityAtUtc) > parseTimestamp(reference.lastActivityAtUtc)
 }
 
+// Same buckets as the backend (DashboardService): AI level of completed
+// detections, plus sessions still processing and not submitted yet.
 function calculateRiskDistribution(sessions: DashboardSessionRow[]) {
   return sessions.reduce((distribution, session) => {
-    if (session.riskScore >= 70) {
-      distribution.high += 1
-    } else if (session.riskScore >= 35) {
-      distribution.medium += 1
+    const detection = session.detection
+    if (detection.status === 'completed') {
+      if (detection.level === 'high') {
+        distribution.high += 1
+      } else if (detection.level === 'medium') {
+        distribution.medium += 1
+      } else {
+        distribution.low += 1
+      }
+    } else if (detection.status === 'waiting') {
+      distribution.waiting += 1
     } else {
-      distribution.low += 1
+      distribution.processing += 1
     }
 
     return distribution
-  }, { low: 0, medium: 0, high: 0 })
+  }, { low: 0, medium: 0, high: 0, processing: 0, waiting: 0 })
+}
+
+const waitingDetection: SessionDetection = {
+  status: 'waiting',
+  score: null,
+  decision: null,
+  level: null,
+  method: null,
+  votersUsed: null,
+  models: [],
+  requestedAtUtc: null,
+  completedAtUtc: null,
+  error: null,
+}
+
+// Live events carry the session status but not the AI result: the moment a
+// session turns "submitted" it shows "processing" right away; the result
+// itself arrives with the "detection.updated" event (dashboard refetch).
+function resolveLiveDetection(existing: SessionDetection | undefined, status: string): SessionDetection {
+  const current = existing ?? waitingDetection
+  if (status.toLowerCase() === 'submitted' && current.status === 'waiting') {
+    return { ...current, status: 'processing' }
+  }
+
+  return current
 }
 
 function incrementEventFrequency(frequencies: ExamDashboard['eventFrequencies'], eventType: string) {
@@ -1694,8 +1746,6 @@ function sortSessionTimeline(timeline: SessionTimeline): SessionTimeline {
     ...timeline,
     questions: [...timeline.questions].sort((left, right) => left.orderIndex - right.orderIndex),
     events: sortTimelineEvents(timeline.events),
-    riskSnapshots: [...timeline.riskSnapshots].sort((left, right) =>
-      parseTimestamp(left.createdAtUtc) - parseTimestamp(right.createdAtUtc)),
   }
 }
 
@@ -1747,8 +1797,16 @@ function formatDuration(ms: number) {
   return `${(ms / 1000).toFixed(1)}s`
 }
 
-function Metric({ label, value, tone }: { label: string; value: number; tone: 'emerald' | 'amber' | 'rose' }) {
-  const toneClass = tone === 'emerald' ? 'text-emerald-800 bg-emerald-50' : tone === 'amber' ? 'text-amber-800 bg-amber-50' : 'text-rose-800 bg-rose-50'
+const METRIC_TONES = {
+  emerald: 'text-emerald-800 bg-emerald-50',
+  amber: 'text-amber-800 bg-amber-50',
+  rose: 'text-rose-800 bg-rose-50',
+  sky: 'text-sky-800 bg-sky-50',
+  slate: 'text-slate-700 bg-slate-50',
+}
+
+function Metric({ label, value, tone }: { label: string; value: number; tone: keyof typeof METRIC_TONES }) {
+  const toneClass = METRIC_TONES[tone]
 
   return (
     <div className={`rounded-lg border border-slate-300 p-4 ${toneClass}`}>

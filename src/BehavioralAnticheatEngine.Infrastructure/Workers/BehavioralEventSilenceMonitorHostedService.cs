@@ -159,7 +159,6 @@ public sealed class BehavioralEventSilenceMonitorHostedService : BackgroundServi
             trackedSession.StudentId,
             trackedSession.ParticipantName,
             trackedSession.Status,
-            trackedSession.CurrentRiskScore,
             existingState?.TotalEvents ?? 0,
             trackedSession.LastActivityAtUtc,
             eventType);

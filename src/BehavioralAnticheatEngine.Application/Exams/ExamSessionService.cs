@@ -4,6 +4,7 @@ using BehavioralAnticheatEngine.Application.Auth;
 using BehavioralAnticheatEngine.Application.Common.Exceptions;
 using BehavioralAnticheatEngine.Application.Common.Interfaces;
 using BehavioralAnticheatEngine.Application.Dashboard.Contracts;
+using BehavioralAnticheatEngine.Application.Detection;
 using BehavioralAnticheatEngine.Application.Exams.Contracts;
 using BehavioralAnticheatEngine.Domain.Exams;
 using Microsoft.Extensions.Logging;
@@ -40,6 +41,7 @@ public sealed class ExamSessionService : IExamSessionService
     private readonly IExamSessionSecretStore _sessionSecrets;
     private readonly ILiveExamStateStore _liveState;
     private readonly IDashboardEventBus _dashboardEvents;
+    private readonly IDetectionRequestService _detectionRequests;
     private readonly IUnitOfWork _unitOfWork;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<ExamSessionService> _logger;
@@ -50,6 +52,7 @@ public sealed class ExamSessionService : IExamSessionService
         IExamSessionSecretStore sessionSecrets,
         ILiveExamStateStore liveState,
         IDashboardEventBus dashboardEvents,
+        IDetectionRequestService detectionRequests,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
         ILogger<ExamSessionService> logger)
@@ -59,6 +62,7 @@ public sealed class ExamSessionService : IExamSessionService
         _sessionSecrets = sessionSecrets;
         _liveState = liveState;
         _dashboardEvents = dashboardEvents;
+        _detectionRequests = detectionRequests;
         _unitOfWork = unitOfWork;
         _timeProvider = timeProvider;
         _logger = logger;
@@ -218,6 +222,7 @@ public sealed class ExamSessionService : IExamSessionService
             // being reported as "active" and resumable on every subsequent refresh.
             session.Submit(now);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await RequestDetectionAsync(session, cancellationToken);
             throw new ApplicationValidationException("Session has expired.");
         }
 
@@ -319,6 +324,7 @@ public sealed class ExamSessionService : IExamSessionService
         var now = _timeProvider.GetUtcNow();
         session.Submit(now);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await RequestDetectionAsync(session, cancellationToken);
 
         var answers = await _exams.ListAnswersForSessionAsync(sessionId, cancellationToken);
         var score = answers.All(answer => !answer.RequiresManualScoring || answer.ManualScore is not null)
@@ -373,7 +379,6 @@ public sealed class ExamSessionService : IExamSessionService
             session.StudentId,
             session.ParticipantName,
             session.Status,
-            session.CurrentRiskScore,
             existingState?.TotalEvents ?? 0,
             session.LastActivityAtUtc,
             eventType);
@@ -388,6 +393,23 @@ public sealed class ExamSessionService : IExamSessionService
                 JsonSerializer.Serialize(state, WebJsonOptions),
                 _timeProvider.GetUtcNow()),
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Every path that submits a session queues it for AI detection. A failure
+    /// here must never fail the student's submit - the Worker's recovery sweep
+    /// picks up submitted sessions that have no detection yet.
+    /// </summary>
+    private async Task RequestDetectionAsync(ExamSession session, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _detectionRequests.RequestAsync(session.Id, session.ExamScheduleId, session.SubmittedAtUtc ?? _timeProvider.GetUtcNow(), cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Detection request failed for session {SessionId}; recovery sweep will pick it up.", session.Id);
+        }
     }
 
     private static void EnsureStudentOwnsSession(ExamSession session, Guid studentId)
@@ -411,6 +433,7 @@ public sealed class ExamSessionService : IExamSessionService
         {
             session.Submit(now);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await RequestDetectionAsync(session, cancellationToken);
             throw new ApplicationValidationException("Session has expired.");
         }
     }

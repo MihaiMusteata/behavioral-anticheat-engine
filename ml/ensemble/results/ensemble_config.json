@@ -1,0 +1,43 @@
+{
+  "session": {
+    "method": "soft_weighted",
+    "voters": [
+      "01_catboost",
+      "02_tabpfn",
+      "03_logistic_regression",
+      "04_minirocket",
+      "05_isolation_forest"
+    ],
+    "weights": {
+      "01_catboost": 0.200136,
+      "02_tabpfn": 0.196387,
+      "03_logistic_regression": 0.192923,
+      "04_minirocket": 0.195545,
+      "05_isolation_forest": 0.21501
+    },
+    "threshold": 0.5,
+    "strict_threshold": 0.675489,
+    "strict_target_fpr": 0.05
+  },
+  "question": {
+    "method": "majority",
+    "voters": [
+      "01_catboost",
+      "03_logistic_regression",
+      "05_isolation_forest"
+    ],
+    "weights": {
+      "01_catboost": 0.333333,
+      "03_logistic_regression": 0.333333,
+      "05_isolation_forest": 0.333333
+    },
+    "threshold": 0.5,
+    "strict_threshold": 0.539143,
+    "strict_target_fpr": 0.05,
+    "decision": "majority of the voters that voted (2 of 3)",
+    "session_aggregation": "top3_mean"
+  },
+  "abstention": "weights renormalised over the voters that returned a value",
+  "prior_note": "Voters were trained with balanced classes (50/50). Scores are 'cheating-pattern likelihood at a 50% base rate', not calibrated to a real exam's cheating rate.",
+  "built_from": "out-of-fold predictions, scheme logo (leave-one-group-out), 310 sessions"
+}

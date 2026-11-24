@@ -1,0 +1,9 @@
+{
+  "model": "03_logistic_regression",
+  "level": "session",
+  "trained_on_rows": 310,
+  "trained_on_sessions": 310,
+  "predicts_rows": 310,
+  "file": "artifacts/model.joblib",
+  "roundtrip_check": "passed"
+}

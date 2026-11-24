@@ -1,0 +1,17 @@
+[
+  "coef_window_blur",
+  "coef_paste",
+  "coef_text_burst_detected",
+  "coef_answer_change",
+  "coef_question_navigation",
+  "ar_l1",
+  "ma_l1",
+  "sigma2",
+  "intercept",
+  "aic_arima",
+  "aic_arimax",
+  "aic_gain",
+  "resid_max_abs_z",
+  "resid_share_abs_z_gt2",
+  "resid_mean_z"
+]

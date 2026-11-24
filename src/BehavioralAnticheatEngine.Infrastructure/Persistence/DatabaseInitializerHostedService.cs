@@ -1,5 +1,4 @@
 using BehavioralAnticheatEngine.Application.Common.Interfaces;
-using BehavioralAnticheatEngine.Domain.Behavior;
 using BehavioralAnticheatEngine.Domain.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -33,47 +32,12 @@ public sealed class DatabaseInitializerHostedService : IHostedService
         _logger.LogInformation("Applying application database migrations.");
         await dbContext.Database.MigrateAsync(cancellationToken);
 
-        await SeedScoringRulesAsync(dbContext, _configuration, cancellationToken);
         await SeedConfiguredUsersAsync(scope.ServiceProvider, dbContext, cancellationToken);
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
         return Task.CompletedTask;
-    }
-
-    private static async Task SeedScoringRulesAsync(
-        AppDbContext dbContext,
-        IConfiguration configuration,
-        CancellationToken cancellationToken)
-    {
-        var rules = configuration
-            .GetSection("RiskScoring:Rules")
-            .Get<Dictionary<string, double>>()
-            ?? new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
-
-        if (rules.Count == 0)
-        {
-            return;
-        }
-
-        // Configuration is the source of truth for the placeholder scorer. Rules
-        // removed from configuration must stop contributing after the next start.
-        await dbContext.Database.ExecuteSqlRawAsync(
-            "UPDATE scoring_rules SET \"IsEnabled\" = FALSE;",
-            cancellationToken);
-
-        foreach (var rule in rules)
-        {
-            await dbContext.Database.ExecuteSqlInterpolatedAsync(
-                $"""
-                INSERT INTO scoring_rules ("Id", "FeatureKey", "Weight", "IsEnabled")
-                VALUES ({Guid.NewGuid()}, {rule.Key}, {rule.Value}, TRUE)
-                ON CONFLICT ("FeatureKey") DO UPDATE
-                SET "Weight" = EXCLUDED."Weight", "IsEnabled" = TRUE;
-                """,
-                cancellationToken);
-        }
     }
 
     private async Task SeedConfiguredUsersAsync(

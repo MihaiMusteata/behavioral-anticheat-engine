@@ -1,0 +1,9 @@
+{
+  "model": "04_minirocket",
+  "level": "session",
+  "trained_on_rows": 310,
+  "trained_on_sessions": 310,
+  "predicts_rows": 305,
+  "file": "artifacts/model.joblib",
+  "roundtrip_check": "passed"
+}
